@@ -1,0 +1,25 @@
+services:
+  backend:
+    build: ./backend
+    container_name: fincluster_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - SECRET_KEY=hackathon_super_secret_jwt_key_2026
+    restart: always
+
+  frontend:
+    build: ./frontend
+    container_name: fincluster_frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: always
