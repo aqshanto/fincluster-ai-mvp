@@ -25,9 +25,14 @@ ChartJS.register(
 interface CostChartProps {
   simTime: string;
   savedCost: number;
+  aiEnabled?: boolean; // ⚠️ নতুন প্রপস যুক্ত করা হয়েছে
 }
 
-export default function CostChart({ simTime, savedCost }: CostChartProps) {
+export default function CostChart({
+  simTime,
+  savedCost,
+  aiEnabled = true,
+}: CostChartProps) {
   const [labels, setLabels] = useState<string[]>([]);
   const [legacyData, setLegacyData] = useState<number[]>([]);
   const [aiData, setAiData] = useState<number[]>([]);
@@ -35,53 +40,73 @@ export default function CostChart({ simTime, savedCost }: CostChartProps) {
   // useRef ব্যবহার করছি যাতে setInterval-এর ভেতরে সবসময় লেটেস্ট ডেটা পাওয়া যায়
   const simTimeRef = useRef(simTime);
   const savedCostRef = useRef(savedCost);
+  const aiEnabledRef = useRef(aiEnabled);
 
   useEffect(() => {
     simTimeRef.current = simTime;
     savedCostRef.current = savedCost;
-  }, [simTime, savedCost]);
+    aiEnabledRef.current = aiEnabled;
 
-  // ⚠️ RESET LOGIC: যখনই Reset বাটনে চাপ দেওয়া হবে এবং সময় 00:00:00 হবে, চার্ট একদম খালি হয়ে যাবে!
-  useEffect(() => {
-    if (simTime === "00:00:00" || simTime === "00:00:01") {
+    // ⚠️ FOOLPROOF RESET DETECTION:
+    // simTime (যেমন: "00:00:01") থেকে মোট সেকেন্ড বের করা হচ্ছে
+    const parts = simTime.split(":").map(Number);
+    const totalSeconds =
+      (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+
+    // যদি সময় ৩ সেকেন্ডের কম হয় (অর্থাৎ Reset বাটন চাপলে), গ্রাফ একদম জিরো হয়ে যাবে!
+    if (totalSeconds <= 2) {
       setLabels(["00:00"]);
       setLegacyData([0]);
       setAiData([0]);
     }
-  }, [simTime]);
+  }, [simTime, savedCost, aiEnabled]);
 
   useEffect(() => {
-    // প্রতি ৩ সেকেন্ড (৩০০০ms) পর পর চার্ট আপডেট হবে (যা সিমুলেটরের ঠিক ৩০ মিনিটের সমান)
     const interval = setInterval(() => {
       const currentTime = simTimeRef.current;
-      if (!currentTime || currentTime === "00:00:00") return;
+      if (!currentTime) return;
 
-      // HH:MM ফরম্যাটে সময় নেওয়া হচ্ছে (যেমন: 12:00, 12:30, 13:00)
+      // সময় যদি ০ থাকে (সবেমাত্র Reset করা হলে) নতুন পয়েন্ট অ্যাড করবে না
+      const parts = currentTime.split(":").map(Number);
+      const totalSeconds =
+        (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+      if (totalSeconds <= 2) return;
+
       const timeLabel = currentTime.substring(0, 5);
 
       setLabels((prev) => {
         if (prev[prev.length - 1] === timeLabel) return prev;
         const next = [...prev, timeLabel];
-        // ঠিক ৩০টি পয়েন্ট দেখাবে, ৩০টির বেশি হলে বাম দিক থেকে ১টি করে সরে যাবে (Slide left)
         return next.length > 30 ? next.slice(1) : next;
       });
 
+      // ⚠️ গাণিতিক হিসাব (MATHEMATICAL CALCULATION LOGIC) ⚠️
+      // ১. Legacy Cost সবসময় সাধারণ নিয়মে বাড়বে (যেমন: প্রতি ৩০ মিনিটে ১.০ থেকে ১.৪ ডলার)
+      let currentLegacyInc = 0;
       setLegacyData((prev) => {
-        // ৩০ মিনিটে সাধারণ (Legacy) সিস্টেমে খরচ একটু বেশি বাড়ে
         const lastVal = prev[prev.length - 1] || 0;
-        const increment = 1.2 + Math.random() * 0.4;
-        const next = [...prev, Number((lastVal + increment).toFixed(2))];
+        currentLegacyInc = 1.0 + Math.random() * 0.4;
+        const next = [...prev, Number((lastVal + currentLegacyInc).toFixed(2))];
         return next.length > 30 ? next.slice(1) : next;
       });
 
+      // ২. AI Cost নির্ভর করবে AI চালু আছে নাকি বন্ধ তার ওপর!
       setAiData((prev) => {
-        // ৩০ মিনিটে AI অপটিমাইজড সিস্টেমে খরচ অনেক কম বাড়ে
         const lastVal = prev[prev.length - 1] || 0;
-        const increment = 0.3 + Math.random() * 0.15;
-        const next = [...prev, Number((lastVal + increment).toFixed(2))];
+        let aiInc = 0;
+
+        if (aiEnabledRef.current) {
+          // AI ON থাকলে: অপটিমাইজেশন হবে, তাই খরচ Legacy খরচের মাত্র ২৫% হবে (লাইন দুটি দুই দিকে যাবে)
+          aiInc = currentLegacyInc * 0.25;
+        } else {
+          // AI OFF থাকলে: সিস্টেম সাধারণ Legacy নিয়মে চলবে, তাই খরচ Legacy খরচের একদম সমান হবে (লাইন প্যারালাল চলবে)
+          aiInc = currentLegacyInc;
+        }
+
+        const next = [...prev, Number((lastVal + aiInc).toFixed(2))];
         return next.length > 30 ? next.slice(1) : next;
       });
-    }, 3000); // ঠিক ৩ সেকেন্ড পর পর লুপ চলবে
+    }, 3000);
 
     return () => clearInterval(interval);
   }, []);
@@ -136,7 +161,7 @@ export default function CostChart({ simTime, savedCost }: CostChartProps) {
         },
       },
     },
-    animation: { duration: 400 }, // স্মুথ স্লাইডিং অ্যানিমেশন
+    animation: { duration: 400 },
   };
 
   return (

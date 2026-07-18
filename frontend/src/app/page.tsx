@@ -108,9 +108,11 @@ export default function Home() {
             </div>
           </div>
 
+          {/* ⚠️ UPDATED: aiEnabled প্রপস পাঠানো হচ্ছে যাতে গ্রাফের হিসাব ঠিক থাকে */}
           <CostChart
             simTime={telemetry?.sim_time || "00:00:00"}
             savedCost={telemetry?.saved_cost || 0}
+            aiEnabled={telemetry?.ai_enabled ?? true}
           />
         </div>
 
