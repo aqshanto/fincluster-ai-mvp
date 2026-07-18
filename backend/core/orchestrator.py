@@ -4,6 +4,10 @@ from ml.real_ai_engine import real_ai
 
 class MFSOrchestrator:
     def __init__(self):
+        self.reset_simulation()  # init করার সময় reset কল করা হচ্ছে
+
+    def reset_simulation(self):
+        """পুরো সিস্টেম এবং গ্রাফ জিরো (0) থেকে শুরু করার ফাংশন"""
         self.ai_enabled = True
         self.surge_active = False
         self.anomaly_active = False
@@ -16,7 +20,7 @@ class MFSOrchestrator:
         self.legacy_cost = 0.0
         self.optimized_cost = 0.0
         self.latest_ai_decision = "System Normal. AI Smart Scheduling active."
-        self.cluster_outage = False  # নতুন ফ্ল্যাগ: সব নোড ক্র্যাশ করেছে কিনা
+        self.cluster_outage = False
         
         self.nodes = [
             NodeStatus(id=0, name="Node 1 (Heavy GPU)", type="heavy", load=0.0, temp=35.0, assigned=0, status="healthy", costActive=2.5, costStandby=0.0),
@@ -30,11 +34,9 @@ class MFSOrchestrator:
         self.sim_seconds += sim_dt_seconds
         sim_dt_hours = sim_dt_seconds / 3600.0
 
-        # ১. চেক করা হচ্ছে ক্লাস্টারে কোনো অ্যাক্টিভ নোড আছে কিনা
         active_count = sum(1 for n in self.nodes if n.status not in ["standby", "crashed"])
         self.cluster_outage = (active_count == 0)
 
-        # যদি সব নোড ক্র্যাশ করে (Cluster Outage), তবে নতুন টাস্ক রাউটিং সম্পূর্ণ বন্ধ থাকবে!
         if self.cluster_outage:
             self.latest_ai_decision = "[CRITICAL OUTAGE]: All cluster nodes CRASHED! Halting transaction flow until automated thermal cooldown..."
         else:
@@ -65,9 +67,8 @@ class MFSOrchestrator:
                     self.latest_ai_decision = real_ai.analyze_anomaly_with_llm(n.name, n.temp, n.load, self.total_heavy)
             else:
                 if n.load > 75: n.temp += 0.15
-                elif n.temp > 25: n.temp -= 0.2  # ক্র্যাশ করা নোড ধীরে ধীরে ঠান্ডা হচ্ছে
+                elif n.temp > 25: n.temp -= 0.2
 
-            # অটোমেটেড সেলফ-হিলিং লজিক (Self-Healing)
             if n.temp > 95:
                 n.status = "crashed"
                 n.load = 0.0
@@ -76,7 +77,7 @@ class MFSOrchestrator:
             elif n.temp <= 75 and n.status == "warning":
                 n.status = "healthy"
             elif n.temp < 50 and n.status == "crashed":
-                n.status = "healthy"  # ৫০°C-এর নিচে এলে অটোমেটিক আবার Healthy হয়ে যাবে!
+                n.status = "healthy"
                 self.latest_ai_decision = f"[SELF-HEALING]: {n.name} cooled down below 50°C. Re-joining cluster operations!"
 
             if self.ai_enabled and i == 2 and n.status != "crashed":
@@ -119,7 +120,6 @@ class MFSOrchestrator:
             total = self.total_heavy + self.total_light
             dest_idx = total % 3
 
-        # যদি টার্গেট নোড ক্র্যাশ করে থাকে, তবে অন্য যেকোনো হেলদি নোডে রি-রুট করবে
         if self.nodes[dest_idx].status == "crashed":
             healthy_nodes = [idx for idx, n in enumerate(self.nodes) if n.status != "crashed"]
             if healthy_nodes:
@@ -155,7 +155,7 @@ class MFSOrchestrator:
             "surge_active": self.surge_active,
             "anomaly_active": self.anomaly_active,
             "ai_decision": self.latest_ai_decision,
-            "cluster_outage": self.cluster_outage  # ফ্রন্টএন্ডে ফ্ল্যাগ পাঠানো হচ্ছে
+            "cluster_outage": self.cluster_outage
         }
 
 orchestrator = MFSOrchestrator()

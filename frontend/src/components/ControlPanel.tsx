@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { Brain, Zap, Flame, Lock, Unlock } from "lucide-react";
+import { Brain, Zap, Flame, Lock, Unlock, RotateCcw } from "lucide-react";
 import api from "@/services/api";
 
 interface ControlPanelProps {
@@ -40,6 +40,11 @@ export default function ControlPanel({
   const triggerAnomaly = () =>
     api.post("/api/v1/control/trigger-anomaly").catch(() => setShowModal(true));
 
+  // ⚠️ নতুন Reset ফাংশন ⚠️
+  const handleReset = () => {
+    api.post("/api/v1/control/reset").catch(() => setShowModal(true));
+  };
+
   return (
     <>
       <footer className="glass-panel p-4 flex justify-center items-center gap-4 z-20 pointer-events-auto">
@@ -71,17 +76,26 @@ export default function ControlPanel({
 
         <button
           onClick={triggerAnomaly}
-          disabled={anomalyActive}
           className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold transition-all border ${
             anomalyActive
-              ? "bg-amber-600 text-white animate-pulse cursor-not-allowed border-amber-500"
+              ? "bg-amber-600 hover:bg-amber-500 text-white animate-pulse border-amber-500"
               : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-600"
           }`}
         >
           <Flame className="w-5 h-5 text-amber-400" />
           <span>
-            {anomalyActive ? "Node 1 Overheating..." : "Trigger Node 1 Anomaly"}
+            {anomalyActive ? "Stop Anomaly" : "Trigger Node 1 Anomaly"}
           </span>
+        </button>
+
+        {/* ⚠️ নতুন RESET SIMULATION বাটন ⚠️ */}
+        <button
+          onClick={handleReset}
+          title="Reset time, graph and nodes to zero"
+          className="flex items-center gap-2 px-5 py-2 rounded-lg font-bold transition-all border bg-rose-950/80 hover:bg-rose-900 text-rose-300 border-rose-700 shadow-lg hover:shadow-rose-900/50 active:scale-95"
+        >
+          <RotateCcw className="w-5 h-5 text-rose-400" />
+          <span>Reset Sim</span>
         </button>
 
         <div className="w-px h-8 bg-slate-700 mx-2"></div>
@@ -106,7 +120,7 @@ export default function ControlPanel({
       {/* Login Modal for Hackathon Demo */}
       {showModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center z-50 pointer-events-auto">
-          <div className="glass-panel p-6 rounded-xl w-[350px] border border-slate-600 shadow-2xl">
+          <div className="glass-panel p-6 rounded-xl w-87.5 border border-slate-600 shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
               <Lock className="w-5 h-5 text-blue-400" /> Admin Authentication
             </h3>

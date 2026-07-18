@@ -32,7 +32,7 @@ export default function CostChart({ simTime, savedCost }: CostChartProps) {
   const [legacyData, setLegacyData] = useState<number[]>([]);
   const [aiData, setAiData] = useState<number[]>([]);
 
-  // useRef ব্যবহার করছি যাতে setInterval-এর ভেতরে সবসময় লেটেস্ট ডেটা পাওয়া যায়
+  // useRef ব্যবহার করছি যাতে setInterval-এর ভেতরে সবসময় লেটেস্ট ডেটা পাওয়া যায়
   const simTimeRef = useRef(simTime);
   const savedCostRef = useRef(savedCost);
 
@@ -41,24 +41,33 @@ export default function CostChart({ simTime, savedCost }: CostChartProps) {
     savedCostRef.current = savedCost;
   }, [simTime, savedCost]);
 
+  // ⚠️ RESET LOGIC: যখনই Reset বাটনে চাপ দেওয়া হবে এবং সময় 00:00:00 হবে, চার্ট একদম খালি হয়ে যাবে!
+  useEffect(() => {
+    if (simTime === "00:00:00" || simTime === "00:00:01") {
+      setLabels(["00:00"]);
+      setLegacyData([0]);
+      setAiData([0]);
+    }
+  }, [simTime]);
+
   useEffect(() => {
     // প্রতি ৩ সেকেন্ড (৩০০০ms) পর পর চার্ট আপডেট হবে (যা সিমুলেটরের ঠিক ৩০ মিনিটের সমান)
     const interval = setInterval(() => {
       const currentTime = simTimeRef.current;
       if (!currentTime || currentTime === "00:00:00") return;
 
-      // HH:MM ফরম্যাটে সময় নেওয়া হচ্ছে (যেমন: 12:00, 12:30, 13:00)
+      // HH:MM ফরম্যাটে সময় নেওয়া হচ্ছে (যেমন: 12:00, 12:30, 13:00)
       const timeLabel = currentTime.substring(0, 5);
 
       setLabels((prev) => {
         if (prev[prev.length - 1] === timeLabel) return prev;
         const next = [...prev, timeLabel];
-        // ঠিক ৩০টি পয়েন্ট দেখাবে, ৩০টির বেশি হলে বাম দিক থেকে ১টি করে সরে যাবে (Slide left)
+        // ঠিক ৩০টি পয়েন্ট দেখাবে, ৩০টির বেশি হলে বাম দিক থেকে ১টি করে সরে যাবে (Slide left)
         return next.length > 30 ? next.slice(1) : next;
       });
 
       setLegacyData((prev) => {
-        // ৩০ মিনিটে সাধারণ (Legacy) সিস্টেমে খরচ একটু বেশি বাড়ে
+        // ৩০ মিনিটে সাধারণ (Legacy) সিস্টেমে খরচ একটু বেশি বাড়ে
         const lastVal = prev[prev.length - 1] || 0;
         const increment = 1.2 + Math.random() * 0.4;
         const next = [...prev, Number((lastVal + increment).toFixed(2))];
@@ -66,7 +75,7 @@ export default function CostChart({ simTime, savedCost }: CostChartProps) {
       });
 
       setAiData((prev) => {
-        // ৩০ মিনিটে AI অপটিমাইজড সিস্টেমে খরচ অনেক কম বাড়ে
+        // ৩০ মিনিটে AI অপটিমাইজড সিস্টেমে খরচ অনেক কম বাড়ে
         const lastVal = prev[prev.length - 1] || 0;
         const increment = 0.3 + Math.random() * 0.15;
         const next = [...prev, Number((lastVal + increment).toFixed(2))];
@@ -144,7 +153,7 @@ export default function CostChart({ simTime, savedCost }: CostChartProps) {
             Total Saved
           </p>
           <p className="text-xl font-bold text-emerald-400 metric-value">
-            ${savedCostRef.current.toFixed(2)}
+            ${savedCost.toFixed(2)}
           </p>
         </div>
       </div>
