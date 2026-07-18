@@ -40,7 +40,6 @@ export default function ControlPanel({
   const triggerAnomaly = () =>
     api.post("/api/v1/control/trigger-anomaly").catch(() => setShowModal(true));
 
-  // ⚠️ নতুন Reset ফাংশন ⚠️
   const handleReset = () => {
     api.post("/api/v1/control/reset").catch(() => setShowModal(true));
   };
@@ -48,15 +47,18 @@ export default function ControlPanel({
   return (
     <>
       <footer className="glass-panel p-4 flex justify-center items-center gap-4 z-20 pointer-events-auto">
+        {/* ⚠️ FIXED BUG: এখন aiEnabled false হলে বাটনটির রঙ ও টেক্সট সাথে সাথে পাল্টে যাবে! */}
         <button
           onClick={toggleAI}
           className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold transition-all shadow-lg ${
             aiEnabled
               ? "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/30"
-              : "bg-slate-700 hover:bg-slate-600 text-slate-300"
+              : "bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-600 shadow-none"
           }`}
         >
-          <Brain className="w-5 h-5" />
+          <Brain
+            className={`w-5 h-5 ${aiEnabled ? "text-white animate-pulse" : "text-slate-400"}`}
+          />
           <span>FinCluster AI: {aiEnabled ? "ON" : "OFF (LEGACY)"}</span>
         </button>
 
@@ -88,7 +90,6 @@ export default function ControlPanel({
           </span>
         </button>
 
-        {/* ⚠️ নতুন RESET SIMULATION বাটন ⚠️ */}
         <button
           onClick={handleReset}
           title="Reset time, graph and nodes to zero"
@@ -117,7 +118,6 @@ export default function ControlPanel({
         </button>
       </footer>
 
-      {/* Login Modal for Hackathon Demo */}
       {showModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center z-50 pointer-events-auto">
           <div className="glass-panel p-6 rounded-xl w-87.5 border border-slate-600 shadow-2xl">

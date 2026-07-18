@@ -17,8 +17,12 @@ export default function Home() {
     const ws = new WebSocket(wsUrl);
 
     ws.onmessage = (event) => {
-      const data: TelemetryData = JSON.parse(event.data);
-      setTelemetry(data);
+      try {
+        const data: TelemetryData = JSON.parse(event.data);
+        setTelemetry(data);
+      } catch (err) {
+        console.error("Failed to parse telemetry data:", err);
+      }
     };
 
     ws.onerror = (err) => console.error("WebSocket error:", err);
@@ -111,7 +115,6 @@ export default function Home() {
         </div>
 
         <div className="absolute left-1/2 top-[45%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center pointer-events-auto">
-          {/* Fixed line below: replaced 'not' with '!' */}
           {telemetry?.ai_decision && !telemetry?.cluster_outage && (
             <div className="absolute -top-16 w-137.5 bg-blue-950/90 border border-blue-500/50 p-2.5 rounded-lg shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fade-in">
               <div className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-ping shrink-0"></div>
@@ -162,10 +165,11 @@ export default function Home() {
         </div>
       </main>
 
+      {/* ⚠️ FIXED: || true সরানো হয়েছে যাতে false হলে false-ই পাস হয়! */}
       <ControlPanel
-        aiEnabled={telemetry?.ai_enabled || true}
-        surgeActive={telemetry?.surge_active || false}
-        anomalyActive={telemetry?.anomaly_active || false}
+        aiEnabled={telemetry?.ai_enabled ?? true}
+        surgeActive={telemetry?.surge_active ?? false}
+        anomalyActive={telemetry?.anomaly_active ?? false}
       />
     </div>
   );
