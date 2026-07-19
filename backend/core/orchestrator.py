@@ -133,6 +133,45 @@ class MFSOrchestrator:
         
         self.nodes[dest_idx].assigned += 1
         self.nodes[dest_idx].load = min(100.0, self.nodes[dest_idx].load + load_amt)
+    
+    # ⚠️ নতুন ম্যানুয়াল ট্রানজিকশন প্রসেসিং লজিক (রিয়েল-ওয়ার্ল্ড মেটাডেটা সহ)
+    def inject_manual_transaction(self, amount: float, tx_type: int, account_age: int, metadata: dict):
+        if self.cluster_outage:
+            self.failed_tasks += 1
+            return {"status": "failed", "reason": "Cluster Outage"}
+
+        # AI ইঞ্জিন দিয়ে বিশ্লেষণ (মেটাডেটার ওপর ভিত্তি করে জটিলা ঠিক করা হবে)
+        is_vpn = metadata.get("is_vpn", False)
+        mcc = metadata.get("mcc", "5411") # 5411: Grocery, 6011: ATM, 7995: Gambling
+        
+        # রিয়েল-ওয়ার্ল্ড লজিক: যদি VPN অন থাকে অথবা Gambling MCC হয় অথবা অ্যামাউন্ট ২৫,০০০ এর বেশি হয় -> High Risk Heavy Task!
+        is_heavy = (amount > 20000) or is_vpn or (mcc == "7995") or (account_age < 5 and amount > 5000)
+        load_to_add = 15.0 if is_heavy else 4.0
+
+        if is_heavy:
+            self.total_heavy += 1
+            task_name = "HEAVY FRAUD CHECK"
+        else:
+            self.total_light += 1
+            task_name = "LIGHT FAST-PATH"
+
+        # টাস্ক রাউট করা
+        self.route_task(is_heavy, load_to_add)
+
+        # সুন্দর রিয়েল-ওয়ার্ল্ড AI লগ তৈরি করা
+        stan = metadata.get("stan", "102938")
+        ip = metadata.get("ip_address", "103.108.x.x")
+        self.latest_ai_decision = (
+            f"[MANUAL TX | STAN:{stan}]: ${amount} | MCC:{mcc} | IP:{ip} | VPN:{is_vpn} "
+            f"--> AI Analyzed: {task_name}. Routed instantly!"
+        )
+
+        return {
+            "status": "success",
+            "is_heavy": is_heavy,
+            "decision": self.latest_ai_decision,
+            "stan": stan
+        }
 
     def format_time(self, secs: float) -> str:
         h = int(secs // 3600)

@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncio
 import json
+import random
+import uuid
 
 from core.orchestrator import orchestrator
 
@@ -36,16 +38,16 @@ class LoginRequest(BaseModel):
 class TransactionMetadata(BaseModel):
     stan: str
     rrn: str
-    mcc: str          
-    terminal_id: str  
-    device_id: str    
+    mcc: str          # Merchant Category Code (e.g., 5411 Grocery, 7995 Gambling)
+    terminal_id: str  # POS / ATM / Gateway ID
+    device_id: str    # Hardware IMEI/Fingerprint
     ip_address: str
     is_vpn: bool
-    location: str     
+    location: str     # Latitude, Longitude
 
 class ManualTxRequest(BaseModel):
     amount: float
-    tx_type: int      
+    tx_type: int      # 0: Send Money, 1: Cash Out, 2: Merchant Pay
     account_age_days: int
     metadata: TransactionMetadata
 
@@ -75,7 +77,7 @@ async def reset_simulation():
     orchestrator.reset_simulation()
     return {"status": "success", "message": "Simulation reset to zero"}
 
-# ⚠️ INJECT API ENDPOINT
+# ⚠️ নতুন INJECT API ENDPOINT
 @app.post("/api/v1/transaction/inject")
 async def inject_transaction(req: ManualTxRequest):
     result = orchestrator.inject_manual_transaction(
