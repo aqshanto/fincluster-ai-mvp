@@ -16,9 +16,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ⚠️ নতুন ROOT ENDPOINT (ব্রাউজারে লিংকে ঢোকার পর আর Not Found দেখাবে না)
+@app.get("/")
+async def root_status():
+    return {
+        "system": "FinCluster AI Core Switch & Routing Engine",
+        "status": "ONLINE 🟢",
+        "version": "1.0.0-MVP",
+        "protocol": "ISO-8583 / ISO-20022",
+        "documentation": "https://fincluster-backend.onrender.com/docs",
+        "message": "Welcome to the real-time MFS transaction routing backend!"
+    }
+
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+# ⚠️ রিয়েল-ওয়ার্ল্ড ট্রানজিকশন মেটাডেটা স্কিমা
+class TransactionMetadata(BaseModel):
+    stan: str
+    rrn: str
+    mcc: str          
+    terminal_id: str  
+    device_id: str    
+    ip_address: str
+    is_vpn: bool
+    location: str     
+
+class ManualTxRequest(BaseModel):
+    amount: float
+    tx_type: int      
+    account_age_days: int
+    metadata: TransactionMetadata
 
 @app.post("/api/v1/auth/login")
 async def login(req: LoginRequest):
@@ -41,11 +70,21 @@ async def trigger_anomaly():
     orchestrator.anomaly_active = not orchestrator.anomaly_active
     return {"status": "success", "anomaly_active": orchestrator.anomaly_active}
 
-# ⚠️ নতুন RESET API ENDPOINT ⚠️
 @app.post("/api/v1/control/reset")
 async def reset_simulation():
     orchestrator.reset_simulation()
     return {"status": "success", "message": "Simulation reset to zero"}
+
+# ⚠️ INJECT API ENDPOINT
+@app.post("/api/v1/transaction/inject")
+async def inject_transaction(req: ManualTxRequest):
+    result = orchestrator.inject_manual_transaction(
+        amount=req.amount,
+        tx_type=req.tx_type,
+        account_age=req.account_age_days,
+        metadata=req.metadata.model_dump()
+    )
+    return result
 
 @app.websocket("/ws/telemetry")
 async def websocket_telemetry(websocket: WebSocket):
