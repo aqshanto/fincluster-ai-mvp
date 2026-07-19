@@ -95,7 +95,7 @@ export default function TransactionModal({ onClose }: TransactionModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex justify-center items-center z-50 pointer-events-auto animate-fade-in">
-      <div className="glass-panel p-6 rounded-2xl w-[520px] border border-slate-700 shadow-2xl bg-slate-900/95 text-slate-100 relative">
+      <div className="glass-panel p-6 rounded-2xl w-130 border border-slate-700 shadow-2xl bg-slate-900/95 text-slate-100 relative">
         {/* Header */}
         <div className="flex justify-between items-center pb-3 mb-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
