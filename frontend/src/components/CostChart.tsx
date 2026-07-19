@@ -28,7 +28,11 @@ interface CostChartProps {
   aiEnabled?: boolean;
 }
 
-export default function CostChart({ simTime, savedCost, aiEnabled = true }: CostChartProps) {
+export default function CostChart({
+  simTime,
+  savedCost,
+  aiEnabled = true,
+}: CostChartProps) {
   const [labels, setLabels] = useState<string[]>(["00:00"]);
   const [legacyData, setLegacyData] = useState<number[]>([0]);
   const [aiData, setAiData] = useState<number[]>([0]);
@@ -36,22 +40,43 @@ export default function CostChart({ simTime, savedCost, aiEnabled = true }: Cost
   const simTimeRef = useRef(simTime);
   const savedCostRef = useRef(savedCost);
   const aiEnabledRef = useRef(aiEnabled);
+  const prevSimSecondsRef = useRef<number>(0);
+
+  // ⚠️ INSTANT UI WIPE LISTENER (বাটন চাপার সাথে সাথে ০ মিলি-সেকেন্ডে গ্রাফ মুছবে!):
+  useEffect(() => {
+    const handleInstantReset = () => {
+      setLabels(["00:00"]);
+      setLegacyData([0]);
+      setAiData([0]);
+      prevSimSecondsRef.current = 0;
+    };
+
+    window.addEventListener("force_reset_ui", handleInstantReset);
+    return () =>
+      window.removeEventListener("force_reset_ui", handleInstantReset);
+  }, []);
 
   useEffect(() => {
     simTimeRef.current = simTime;
     savedCostRef.current = savedCost;
     aiEnabledRef.current = aiEnabled;
 
-    // ⚠️ 100% BULLETPROOF GRAPH RESET FIX:
-    // যখনই savedCost শূন্য (0) হবে অথবা সময় 00:00:00 হবে, সাথে সাথে গ্রাফ মুছে যাবে!
     const parts = simTime.split(":").map(Number);
-    const totalSeconds = (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+    const currentSimSeconds =
+      (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
 
-    if (savedCost === 0 || totalSeconds <= 2 || simTime === "00:00:00") {
+    // সার্ভার থেকে ডেটা জিরো হয়ে এলে (Safety Check)
+    if (
+      currentSimSeconds < prevSimSecondsRef.current - 10 ||
+      savedCost === 0 ||
+      simTime === "00:00:00"
+    ) {
       setLabels(["00:00"]);
       setLegacyData([0]);
       setAiData([0]);
     }
+
+    prevSimSecondsRef.current = currentSimSeconds;
   }, [simTime, savedCost, aiEnabled]);
 
   useEffect(() => {
@@ -60,16 +85,22 @@ export default function CostChart({ simTime, savedCost, aiEnabled = true }: Cost
       if (!currentTime) return;
 
       const parts = currentTime.split(":").map(Number);
-      const totalSeconds = (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+      const currentSimSeconds =
+        (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
 
-      // যদি সিস্টেম সদ্য রিসেট করা হয়, তবে নতুন ডেটা পুশ করবে না
-      if (savedCostRef.current === 0 || totalSeconds <= 2 || currentTime === "00:00:00") {
+      if (
+        currentSimSeconds < prevSimSecondsRef.current - 10 ||
+        savedCostRef.current === 0 ||
+        currentTime === "00:00:00"
+      ) {
         setLabels(["00:00"]);
         setLegacyData([0]);
         setAiData([0]);
+        prevSimSecondsRef.current = currentSimSeconds;
         return;
       }
 
+      prevSimSecondsRef.current = currentSimSeconds;
       const timeLabel = currentTime.substring(0, 5);
 
       setLabels((prev) => {
@@ -91,9 +122,9 @@ export default function CostChart({ simTime, savedCost, aiEnabled = true }: Cost
         let aiInc = 0;
 
         if (aiEnabledRef.current) {
-          aiInc = currentLegacyInc * 0.25; // AI ON: খরচ ৭৫% কম বাড়বে
+          aiInc = currentLegacyInc * 0.25;
         } else {
-          aiInc = currentLegacyInc; // AI OFF: Legacy খরচের সমান বাড়বে (Parallel)
+          aiInc = currentLegacyInc;
         }
 
         const next = [...prev, Number((lastVal + aiInc).toFixed(2))];

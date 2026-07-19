@@ -40,14 +40,18 @@ export default function ControlPanel({
   const triggerAnomaly = () =>
     api.post("/api/v1/control/trigger-anomaly").catch(() => setShowModal(true));
 
+  // ⚠️ INSTANT FORCE RESET LOGIC (০ মিলি-সেকেন্ডে কাজ করবে!):
   const handleReset = () => {
+    // ১. ক্লিক করার সাথে সাথে ব্রাউজারে ইভেন্ট ফায়ার করবে (গ্রাফ ও বল তৎক্ষণাৎ জিরো হবে)
+    window.dispatchEvent(new Event("force_reset_ui"));
+
+    // ২. ব্যাকএন্ডে API কল পাঠাবে সার্ভারের ঘড়ি জিরো করার জন্য
     api.post("/api/v1/control/reset").catch(() => setShowModal(true));
   };
 
   return (
     <>
       <footer className="glass-panel p-4 flex justify-center items-center gap-4 z-20 pointer-events-auto">
-        {/* ⚠️ FIXED BUG: এখন aiEnabled false হলে বাটনটির রঙ ও টেক্সট সাথে সাথে পাল্টে যাবে! */}
         <button
           onClick={toggleAI}
           className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold transition-all shadow-lg ${
@@ -92,7 +96,7 @@ export default function ControlPanel({
 
         <button
           onClick={handleReset}
-          title="Reset time, graph and nodes to zero"
+          title="Reset time, graph and nodes instantly"
           className="flex items-center gap-2 px-5 py-2 rounded-lg font-bold transition-all border bg-rose-950/80 hover:bg-rose-900 text-rose-300 border-rose-700 shadow-lg hover:shadow-rose-900/50 active:scale-95"
         >
           <RotateCcw className="w-5 h-5 text-rose-400" />
