@@ -100,8 +100,17 @@ export default function TransactionSimulatorPage() {
         rrn: rrn,
         isHeavy: res.data.is_heavy,
       });
-    } catch (err) {
-      alert("Failed to transmit to Switch. Check network connection.");
+    } catch (err: any) {
+      // ⚠️ এখন সাধারণ মেসেজের বদলে সার্ভার থেকে আসা আসল এররটি স্ক্রিনে দেখাবে!
+      const errorDetails =
+        err.response?.data?.detail ||
+        err.response?.data ||
+        err.message ||
+        "Unknown Server Error";
+      console.error("Full Error:", err);
+      alert(
+        `❌ Switch Transmission Failed!\n\nReason: ${JSON.stringify(errorDetails, null, 2)}\n\nTip: Check F12 Console for more info.`,
+      );
     } finally {
       setLoading(false);
     }
