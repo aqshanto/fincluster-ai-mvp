@@ -31,7 +31,18 @@ export default function Home() {
 
   return (
     <div className="relative h-screen w-screen flex flex-col justify-between overflow-hidden">
-      <SimulationCanvas telemetry={telemetry} />
+      {/* ⚠️ UPDATED: লাইভ টাস্ক সংখ্যা SimulationCanvas-এ পাঠানো হচ্ছে! */}
+      <SimulationCanvas
+        aiEnabled={telemetry?.ai_enabled ?? true}
+        surgeActive={telemetry?.surge_active ?? false}
+        nodes={telemetry?.nodes ?? []}
+        aiDecision={telemetry?.ai_decision}
+        clusterOutage={telemetry?.cluster_outage ?? false}
+        totalHeavy={telemetry?.total_heavy || 0}
+        totalLight={telemetry?.total_light || 0}
+        telemetry={telemetry}
+      />
+
       <Header telemetry={telemetry} />
 
       {/* ⚠️ CRITICAL CLUSTER OUTAGE OVERLAY BANNER */}
@@ -108,7 +119,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* ⚠️ UPDATED: aiEnabled প্রপস পাঠানো হচ্ছে যাতে গ্রাফের হিসাব ঠিক থাকে */}
           <CostChart
             simTime={telemetry?.sim_time || "00:00:00"}
             savedCost={telemetry?.saved_cost || 0}
@@ -167,7 +177,6 @@ export default function Home() {
         </div>
       </main>
 
-      {/* ⚠️ FIXED: || true সরানো হয়েছে যাতে false হলে false-ই পাস হয়! */}
       <ControlPanel
         aiEnabled={telemetry?.ai_enabled ?? true}
         surgeActive={telemetry?.surge_active ?? false}

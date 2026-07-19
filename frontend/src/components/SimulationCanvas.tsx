@@ -1,19 +1,123 @@
 "use client";
 import React, { useEffect, useRef } from "react";
-import { TelemetryData } from "@/types";
 
 interface SimulationCanvasProps {
-  telemetry: TelemetryData | null;
+  aiEnabled?: boolean;
+  surgeActive?: boolean;
+  nodes?: any[];
+  aiDecision?: string;
+  clusterOutage?: boolean;
+  totalHeavy?: number; // ⚠️ নতুন প্রপস: লাইভ Heavy টাস্ক সংখ্যা
+  totalLight?: number; // ⚠️ নতুন প্রপস: লাইভ Light টাস্ক সংখ্যা
+  telemetry?: any;
 }
 
-export default function SimulationCanvas({ telemetry }: SimulationCanvasProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const particlesRef = useRef<any[]>([]);
-  const telemetryRef = useRef<TelemetryData | null>(null);
+interface Particle {
+  id: number;
+  x: number;
+  y: number;
+  startX: number;
+  startY: number;
+  targetX: number;
+  targetY: number;
+  type: "heavy" | "light";
+  progress: number;
+  speed: number;
+  stage: 1 | 2; // stage 1: Left to Center, stage 2: Center to Right Nodes
+  targetNodeIdx: number;
+}
 
+export default function SimulationCanvas({
+  aiEnabled = true,
+  surgeActive = false,
+  nodes = [],
+  clusterOutage = false,
+  totalHeavy = 0,
+  totalLight = 0,
+  telemetry,
+}: SimulationCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const particlesRef = useRef<Particle[]>([]);
+  const prevHeavyRef = useRef<number>(totalHeavy);
+  const prevLightRef = useRef<number>(totalLight);
+
+  // যদি telemetry প্রপস হিসেবে আসে, তবে সেখান থেকে ভ্যালু নেবে
+  const actualHeavy = telemetry?.total_heavy ?? totalHeavy;
+  const actualLight = telemetry?.total_light ?? totalLight;
+  const actualAiEnabled = telemetry?.ai_enabled ?? aiEnabled;
+  const actualOutage = telemetry?.cluster_outage ?? clusterOutage;
+  const actualNodes = telemetry?.nodes ?? nodes;
+
+  // ⚠️ 100% LIVE TRANSACTION BALL SYNC FIX:
+  // যখনই টাস্কের সংখ্যা বাড়বে, নতুন বল (Particle) তৈরি হবে!
   useEffect(() => {
-    telemetryRef.current = telemetry;
-  }, [telemetry]);
+    if (actualOutage) {
+      particlesRef.current = []; // Outage হলে সব বল থেমে যাবে
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const deltaHeavy = actualHeavy - prevHeavyRef.current;
+    const deltaLight = actualLight - prevLightRef.current;
+
+    prevHeavyRef.current = actualHeavy;
+    prevLightRef.current = actualLight;
+
+    // Reset করা হলে বলগুলো ক্লিয়ার হয়ে যাবে
+    if (actualHeavy === 0 && actualLight === 0) {
+      particlesRef.current = [];
+      return;
+    }
+
+    const startX = 250; // বামপাশের MFS App Users বক্সের অবস্থান
+    const startY = canvas.height / 2;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+
+    // Heavy বল স্পন (সর্বোচ্চ একবারে ৬টি যাতে অ্যানিমেশন স্মুথ থাকে)
+    if (deltaHeavy > 0) {
+      const spawnCount = Math.min(deltaHeavy, 6);
+      for (let i = 0; i < spawnCount; i++) {
+        particlesRef.current.push({
+          id: Math.random(),
+          x: startX,
+          y: startY,
+          startX: startX,
+          startY: startY,
+          targetX: centerX,
+          targetY: centerY,
+          type: "heavy",
+          progress: 0,
+          speed: 0.02 + Math.random() * 0.015,
+          stage: 1,
+          targetNodeIdx: actualAiEnabled ? 0 : 0, // AI ON থাকলে Heavy যাবে Node 1-এ
+        });
+      }
+    }
+
+    // Light বল স্পন
+    if (deltaLight > 0) {
+      const spawnCount = Math.min(deltaLight, 6);
+      for (let i = 0; i < spawnCount; i++) {
+        particlesRef.current.push({
+          id: Math.random(),
+          x: startX,
+          y: startY,
+          startX: startX,
+          startY: startY,
+          targetX: centerX,
+          targetY: centerY,
+          type: "light",
+          progress: 0,
+          speed: 0.025 + Math.random() * 0.02,
+          stage: 1,
+          targetNodeIdx: actualAiEnabled ? 1 : 1, // AI ON থাকলে Light যাবে Node 2-এ
+        });
+      }
+    }
+  }, [actualHeavy, actualLight, actualOutage, actualAiEnabled]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -23,147 +127,111 @@ export default function SimulationCanvas({ telemetry }: SimulationCanvasProps) {
 
     let animationFrameId: number;
 
-    const resize = () => {
+    const handleResize = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     };
-    resize();
-    window.addEventListener("resize", resize);
-
-    const spawnParticle = () => {
-      const currentTelemetry = telemetryRef.current;
-      const isSurge = currentTelemetry?.surge_active || false;
-      const isAi = currentTelemetry?.ai_enabled ?? true;
-      const nodes = currentTelemetry?.nodes || [];
-
-      const isHeavy = Math.random() < (isSurge ? 0.4 : 0.25);
-      const W = canvas.width;
-      const H = canvas.height;
-
-      const srcX = 380,
-        srcY = H * 0.45,
-        orchX = W / 2,
-        orchY = H * 0.45,
-        nodeX = W - 350;
-      const nodeYs = [orchY - 140, orchY, orchY + 140];
-
-      let destIdx = 0;
-      if (isAi) {
-        destIdx = isHeavy
-          ? nodes[0]?.status === "healthy" && (nodes[0]?.load || 0) < 85
-            ? 0
-            : 2
-          : nodes[1]?.status === "healthy" && (nodes[1]?.load || 0) < 85
-            ? 1
-            : 2;
-      } else {
-        destIdx = Math.floor(Math.random() * 3);
-      }
-
-      // যদি টার্গেট নোড ক্র্যাশ করে থাকে, তবে অন্য যেকোনো হেলদি নোডে পাঠাবে
-      if (nodes[destIdx]?.status === "crashed") {
-        const healthyIdx = nodes.findIndex((n) => n.status !== "crashed");
-        if (healthyIdx !== -1) destIdx = healthyIdx;
-      }
-
-      particlesRef.current.push({
-        x: srcX,
-        y: srcY + (Math.random() * 40 - 20),
-        target: "orch",
-        progress: 0,
-        speed: isSurge ? 0.035 : 0.018,
-        color: isHeavy ? "#ef4444" : "#3b82f6",
-        size: isHeavy ? 5.5 : 4,
-        destX: nodeX,
-        destY: nodeYs[destIdx] || orchY,
-        startX: 0,
-        startY: 0,
-      });
-    };
-
-    const interval = setInterval(() => {
-      const currentTelemetry = telemetryRef.current;
-
-      // সব নোড ক্র্যাশ করলে (Cluster Outage) ট্রাফিক কণা তৈরি হওয়া সম্পূর্ণ বন্ধ থাকবে!
-      if (currentTelemetry?.cluster_outage) return;
-
-      const spawnChance = currentTelemetry?.surge_active ? 0.85 : 0.35;
-      if (Math.random() < spawnChance) {
-        spawnParticle();
-      }
-    }, 80);
+    handleResize();
+    window.addEventListener("resize", handleResize);
 
     const render = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const W = canvas.width,
-        H = canvas.height;
-      const srcX = 380,
-        srcY = H * 0.45,
-        orchX = W / 2,
-        orchY = H * 0.45,
-        nodeX = W - 350;
-      const nodeYs = [orchY - 140, orchY, orchY + 140];
 
-      ctx.lineWidth = 1;
+      const startX = 260;
+      const startY = canvas.height / 2;
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+
+      const rightX = canvas.width - 260;
+      const nodePositions = [
+        { x: rightX, y: centerY - 130 }, // Node 1
+        { x: rightX, y: centerY }, // Node 2
+        { x: rightX, y: centerY + 130 }, // Node 3
+      ];
+
+      // ১. কানেকশন লাইন আঁকা (Connecting Lines)
+      ctx.lineWidth = 1.5;
       ctx.strokeStyle = "rgba(51, 65, 85, 0.4)";
+
+      // Left to Center Line
       ctx.beginPath();
-      ctx.moveTo(srcX, srcY);
-      ctx.lineTo(orchX, orchY);
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(centerX, centerY);
       ctx.stroke();
 
-      nodeYs.forEach((ny) => {
+      // Center to Right Nodes Lines
+      nodePositions.forEach((pos, idx) => {
+        const nodeStatus = actualNodes[idx]?.status;
         ctx.beginPath();
-        ctx.moveTo(orchX, orchY);
-        ctx.lineTo(nodeX, ny);
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.strokeStyle =
+          nodeStatus === "crashed"
+            ? "rgba(239, 68, 68, 0.3)"
+            : "rgba(51, 65, 85, 0.4)";
         ctx.stroke();
       });
 
-      for (let i = particlesRef.current.length - 1; i >= 0; i--) {
-        const p = particlesRef.current[i];
-        p.progress += p.speed;
+      // ২. বলগুলোর ৬০ এফপিএস অ্যানিমেশন (60 FPS Ball Animation)
+      if (!actualOutage) {
+        particlesRef.current.forEach((p, index) => {
+          p.progress += p.speed;
 
-        if (p.target === "orch") {
-          p.x = (1 - p.progress) * 380 + p.progress * orchX;
-          p.y = (1 - p.progress) * p.y + p.progress * orchY;
           if (p.progress >= 1) {
-            p.target = "node";
-            p.progress = 0;
-            p.startX = p.x;
-            p.startY = p.y;
-          }
-        } else {
-          p.x = (1 - p.progress) * p.startX + p.progress * p.destX;
-          p.y = (1 - p.progress) * p.startY + p.progress * p.destY;
-          if (p.progress >= 1) {
-            particlesRef.current.splice(i, 1);
-            continue;
-          }
-        }
+            if (p.stage === 1) {
+              // Stage 1 শেষ হলে Center থেকে Target Node-এর দিকে যাত্রা শুরু করবে
+              p.stage = 2;
+              p.progress = 0;
+              p.startX = centerX;
+              p.startY = centerY;
 
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = p.color;
-        ctx.fill();
-        ctx.shadowBlur = 0;
+              let targetIdx = 0;
+              if (actualAiEnabled) {
+                targetIdx = p.type === "heavy" ? 0 : 1;
+                if (actualNodes[targetIdx]?.status === "crashed") targetIdx = 2;
+              } else {
+                targetIdx = Math.floor(Math.random() * 3); // Blind Round Robin
+              }
+              p.targetNodeIdx = targetIdx;
+              p.targetX = nodePositions[targetIdx].x;
+              p.targetY = nodePositions[targetIdx].y;
+            } else {
+              // Target Node-এ পৌঁছে গেলে বলটি মুছে যাবে
+              particlesRef.current.splice(index, 1);
+              return;
+            }
+          }
+
+          // Linear Interpolation (Smooth Movement)
+          p.x = p.startX + (p.targetX - p.startX) * p.progress;
+          p.y = p.startY + (p.targetY - p.startY) * p.progress;
+
+          // বল আঁকা (Drawing Glowing Balls)
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.type === "heavy" ? 5 : 4, 0, Math.PI * 2);
+          ctx.fillStyle = p.type === "heavy" ? "#ef4444" : "#3b82f6";
+          ctx.shadowColor = p.type === "heavy" ? "#ef4444" : "#3b82f6";
+          ctx.shadowBlur = 10;
+          ctx.fill();
+          ctx.shadowBlur = 0; // Reset shadow for next drawings
+        });
       }
 
       animationFrameId = requestAnimationFrame(render);
     };
+
     render();
 
     return () => {
-      window.removeEventListener("resize", resize);
       cancelAnimationFrame(animationFrameId);
-      clearInterval(interval);
+      window.removeEventListener("resize", handleResize);
     };
-  }, []);
+  }, [actualOutage, actualAiEnabled, actualNodes]);
 
   return (
     <canvas
       ref={canvasRef}
-      className="absolute top-0 left-0 w-full h-full z-0 pointer-events-none"
+      className="absolute inset-0 pointer-events-none z-0"
     />
   );
 }
