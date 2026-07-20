@@ -1,161 +1,102 @@
 "use client";
-import React, { useEffect, useState, useRef } from "react";
+
+import React, { useEffect, useState } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
-  Title,
   Tooltip,
   Legend,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import { BenchmarkData } from "@/types";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
 interface CostChartProps {
+  runId: number;
   simTime: string;
+  legacyCost: number;
+  optimizedCost: number;
   savedCost: number;
-  aiEnabled?: boolean;
+  benchmark?: BenchmarkData;
 }
 
+interface CostSeries {
+  labels: string[];
+  legacy: number[];
+  optimized: number[];
+}
+
+const emptySeries = (): CostSeries => ({
+  labels: ["00:00"],
+  legacy: [0],
+  optimized: [0],
+});
+
 export default function CostChart({
+  runId,
   simTime,
+  legacyCost,
+  optimizedCost,
   savedCost,
-  aiEnabled = true,
+  benchmark,
 }: CostChartProps) {
-  const [labels, setLabels] = useState<string[]>(["00:00"]);
-  const [legacyData, setLegacyData] = useState<number[]>([0]);
-  const [aiData, setAiData] = useState<number[]>([0]);
+  const [series, setSeries] = useState<CostSeries>(emptySeries);
 
-  const simTimeRef = useRef(simTime);
-  const savedCostRef = useRef(savedCost);
-  const aiEnabledRef = useRef(aiEnabled);
-  const prevSimSecondsRef = useRef<number>(0);
-
-  // ⚠️ INSTANT UI WIPE LISTENER (বাটন চাপার সাথে সাথে ০ মিলি-সেকেন্ডে গ্রাফ মুছবে!):
+  // A backend run ID is the reset signal. Zero savings is a valid metric.
   useEffect(() => {
-    const handleInstantReset = () => {
-      setLabels(["00:00"]);
-      setLegacyData([0]);
-      setAiData([0]);
-      prevSimSecondsRef.current = 0;
-    };
-
-    window.addEventListener("force_reset_ui", handleInstantReset);
-    return () =>
-      window.removeEventListener("force_reset_ui", handleInstantReset);
-  }, []);
+    setSeries(emptySeries());
+  }, [runId]);
 
   useEffect(() => {
-    simTimeRef.current = simTime;
-    savedCostRef.current = savedCost;
-    aiEnabledRef.current = aiEnabled;
-
-    const parts = simTime.split(":").map(Number);
-    const currentSimSeconds =
-      (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
-
-    // সার্ভার থেকে ডেটা জিরো হয়ে এলে (Safety Check)
-    if (
-      currentSimSeconds < prevSimSecondsRef.current - 10 ||
-      savedCost === 0 ||
-      simTime === "00:00:00"
-    ) {
-      setLabels(["00:00"]);
-      setLegacyData([0]);
-      setAiData([0]);
-    }
-
-    prevSimSecondsRef.current = currentSimSeconds;
-  }, [simTime, savedCost, aiEnabled]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const currentTime = simTimeRef.current;
-      if (!currentTime) return;
-
-      const parts = currentTime.split(":").map(Number);
-      const currentSimSeconds =
-        (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
-
-      if (
-        currentSimSeconds < prevSimSecondsRef.current - 10 ||
-        savedCostRef.current === 0 ||
-        currentTime === "00:00:00"
-      ) {
-        setLabels(["00:00"]);
-        setLegacyData([0]);
-        setAiData([0]);
-        prevSimSecondsRef.current = currentSimSeconds;
-        return;
+    const label = simTime.substring(0, 5);
+    setSeries((current) => {
+      const lastIndex = current.labels.length - 1;
+      if (current.labels[lastIndex] === label) {
+        const legacy = [...current.legacy];
+        const optimized = [...current.optimized];
+        legacy[lastIndex] = legacyCost;
+        optimized[lastIndex] = optimizedCost;
+        return { ...current, legacy, optimized };
       }
 
-      prevSimSecondsRef.current = currentSimSeconds;
-      const timeLabel = currentTime.substring(0, 5);
+      const next: CostSeries = {
+        labels: [...current.labels, label],
+        legacy: [...current.legacy, legacyCost],
+        optimized: [...current.optimized, optimizedCost],
+      };
 
-      setLabels((prev) => {
-        if (prev[prev.length - 1] === timeLabel) return prev;
-        const next = [...prev, timeLabel];
-        return next.length > 30 ? next.slice(1) : next;
-      });
-
-      let currentLegacyInc = 0;
-      setLegacyData((prev) => {
-        const lastVal = prev[prev.length - 1] || 0;
-        currentLegacyInc = 1.0 + Math.random() * 0.4;
-        const next = [...prev, Number((lastVal + currentLegacyInc).toFixed(2))];
-        return next.length > 30 ? next.slice(1) : next;
-      });
-
-      setAiData((prev) => {
-        const lastVal = prev[prev.length - 1] || 0;
-        let aiInc = 0;
-
-        if (aiEnabledRef.current) {
-          aiInc = currentLegacyInc * 0.25;
-        } else {
-          aiInc = currentLegacyInc;
-        }
-
-        const next = [...prev, Number((lastVal + aiInc).toFixed(2))];
-        return next.length > 30 ? next.slice(1) : next;
-      });
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, []);
+      if (next.labels.length <= 30) return next;
+      return {
+        labels: next.labels.slice(-30),
+        legacy: next.legacy.slice(-30),
+        optimized: next.optimized.slice(-30),
+      };
+    });
+  }, [simTime, legacyCost, optimizedCost]);
 
   const data = {
-    labels,
+    labels: series.labels,
     datasets: [
       {
         label: "Legacy Cost ($)",
-        data: legacyData,
+        data: series.legacy,
         borderColor: "#ef4444",
         backgroundColor: "#ef4444",
         borderWidth: 2,
-        pointRadius: 2.5,
-        pointHoverRadius: 4,
+        pointRadius: 1.5,
         tension: 0.3,
       },
       {
         label: "AI Cost ($)",
-        data: aiData,
+        data: series.optimized,
         borderColor: "#10b981",
         backgroundColor: "#10b981",
         borderWidth: 2,
-        pointRadius: 2.5,
-        pointHoverRadius: 4,
+        pointRadius: 1.5,
         tension: 0.3,
       },
     ],
@@ -181,20 +122,20 @@ export default function CostChart({
         ticks: {
           color: "#94a3b8",
           font: { size: 10 },
-          callback: (value: any) => "$" + value,
+          callback: (value: string | number) => `$${value}`,
         },
       },
     },
-    animation: { duration: 300 },
+    animation: { duration: 250 },
   };
 
   return (
-    <div className="glass-panel p-5 rounded-xl border-l-4 border-l-emerald-500 pointer-events-auto shadow-lg">
-      <div className="flex justify-between items-start mb-2">
+    <div className="glass-panel p-4 rounded-xl border-l-4 border-l-emerald-500 pointer-events-auto shadow-lg">
+      <div className="flex justify-between items-start mb-1">
         <div>
-          <h3 className="text-white font-semibold text-sm">Cost Analytics</h3>
+          <h3 className="text-white font-semibold text-sm">Fair Benchmark</h3>
           <p className="text-[10px] text-slate-400">
-            Legacy vs AI Optimized ($)
+            Same seeded transactions and service rates
           </p>
         </div>
         <div className="text-right">
@@ -206,9 +147,40 @@ export default function CostChart({
           </p>
         </div>
       </div>
-      <div className="w-full h-40 mt-2">
+
+      <div className="w-full h-32 mt-1">
         <Line data={data} options={options} />
       </div>
+
+      {benchmark && (
+        <div className="mt-2 grid grid-cols-[1.3fr_1fr_1fr] text-[9px] font-mono border-t border-slate-700/70 pt-2 gap-y-1">
+          <span className="text-slate-500">Metric</span>
+          <span className="text-emerald-400 text-right">AI</span>
+          <span className="text-red-400 text-right">Legacy</span>
+          <MetricRow label="P95 latency" ai={`${benchmark.ai.p95_latency_ms} ms`} legacy={`${benchmark.legacy.p95_latency_ms} ms`} />
+          <MetricRow label="Failures" ai={benchmark.ai.failures} legacy={benchmark.legacy.failures} />
+          <MetricRow label="Throughput" ai={`${benchmark.ai.throughput_tx_per_min}/min`} legacy={`${benchmark.legacy.throughput_tx_per_min}/min`} />
+          <MetricRow label="Max temp" ai={`${benchmark.ai.max_temperature_c}°C`} legacy={`${benchmark.legacy.max_temperature_c}°C`} />
+        </div>
+      )}
     </div>
+  );
+}
+
+function MetricRow({
+  label,
+  ai,
+  legacy,
+}: {
+  label: string;
+  ai: React.ReactNode;
+  legacy: React.ReactNode;
+}) {
+  return (
+    <>
+      <span className="text-slate-400">{label}</span>
+      <span className="text-right">{ai}</span>
+      <span className="text-right">{legacy}</span>
+    </>
   );
 }

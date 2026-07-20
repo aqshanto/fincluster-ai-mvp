@@ -7,7 +7,7 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      - SECRET_KEY=hackathon_super_secret_jwt_key_2026
+      - SECRET_KEY=${SECRET_KEY}
     restart: always
 
   frontend:

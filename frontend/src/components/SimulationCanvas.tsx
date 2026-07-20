@@ -1,15 +1,10 @@
 "use client";
+
 import React, { useEffect, useRef } from "react";
+import { NodeStatus, RoutingEvent, TelemetryData } from "@/types";
 
 interface SimulationCanvasProps {
-  aiEnabled?: boolean;
-  surgeActive?: boolean;
-  nodes?: any[];
-  aiDecision?: string;
-  clusterOutage?: boolean;
-  totalHeavy?: number;
-  totalLight?: number;
-  telemetry?: any;
+  telemetry: TelemetryData | null;
 }
 
 interface Particle {
@@ -27,128 +22,82 @@ interface Particle {
   targetNodeIdx: number;
 }
 
-export default function SimulationCanvas({
-  aiEnabled = true,
-  surgeActive = false,
-  nodes = [],
-  clusterOutage = false,
-  totalHeavy = 0,
-  totalLight = 0,
-  telemetry,
-}: SimulationCanvasProps) {
+export default function SimulationCanvas({ telemetry }: SimulationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const particlesRef = useRef<Particle[]>([]);
-  const prevHeavyRef = useRef<number>(totalHeavy);
-  const prevLightRef = useRef<number>(totalLight);
+  const nodesRef = useRef<NodeStatus[]>([]);
+  const outageRef = useRef(false);
+  const seenEventRef = useRef(0);
+  const runIdRef = useRef<number | null>(null);
 
-  const actualHeavy = telemetry?.total_heavy ?? totalHeavy;
-  const actualLight = telemetry?.total_light ?? totalLight;
-  const actualAiEnabled = telemetry?.ai_enabled ?? aiEnabled;
-  const actualOutage = telemetry?.cluster_outage ?? clusterOutage;
-  const actualNodes = telemetry?.nodes ?? nodes;
+  useEffect(() => {
+    if (!telemetry) return;
 
-  // ⚠️ INSTANT UI WIPE FOR BALLS (বাটন চাপলে উড়ন্ত সব বল তৎক্ষণাৎ ক্লিয়ার হবে!):
+    nodesRef.current = telemetry.nodes;
+    outageRef.current = telemetry.cluster_outage;
+
+    if (runIdRef.current !== telemetry.run_id) {
+      runIdRef.current = telemetry.run_id;
+      particlesRef.current = [];
+      seenEventRef.current = 0;
+    }
+
+    if (telemetry.cluster_outage) {
+      particlesRef.current = [];
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const unseenEvents = telemetry.routing_events.filter(
+      (event) => event.event_id > seenEventRef.current,
+    );
+    if (unseenEvents.length === 0) return;
+
+    for (const event of unseenEvents.slice(-12)) {
+      spawnParticle(event, telemetry.ai_enabled, canvas, particlesRef.current);
+    }
+
+    seenEventRef.current = Math.max(
+      seenEventRef.current,
+      ...unseenEvents.map((event) => event.event_id),
+    );
+  }, [telemetry]);
+
   useEffect(() => {
     const handleInstantReset = () => {
       particlesRef.current = [];
-      prevHeavyRef.current = 0;
-      prevLightRef.current = 0;
+      seenEventRef.current = 0;
     };
 
     window.addEventListener("force_reset_ui", handleInstantReset);
-    return () =>
-      window.removeEventListener("force_reset_ui", handleInstantReset);
+    return () => window.removeEventListener("force_reset_ui", handleInstantReset);
   }, []);
 
   useEffect(() => {
-    if (actualOutage) {
-      particlesRef.current = [];
-      return;
-    }
-
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
 
-    const deltaHeavy = actualHeavy - prevHeavyRef.current;
-    const deltaLight = actualLight - prevLightRef.current;
-
-    prevHeavyRef.current = actualHeavy;
-    prevLightRef.current = actualLight;
-
-    if (actualHeavy === 0 && actualLight === 0) {
-      particlesRef.current = [];
-      return;
-    }
-
-    const startX = 250;
-    const startY = canvas.height / 2;
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
-
-    if (deltaHeavy > 0) {
-      const spawnCount = Math.min(deltaHeavy, 6);
-      for (let i = 0; i < spawnCount; i++) {
-        particlesRef.current.push({
-          id: Math.random(),
-          x: startX,
-          y: startY,
-          startX: startX,
-          startY: startY,
-          targetX: centerX,
-          targetY: centerY,
-          type: "heavy",
-          progress: 0,
-          speed: 0.02 + Math.random() * 0.015,
-          stage: 1,
-          targetNodeIdx: actualAiEnabled ? 0 : 0,
-        });
-      }
-    }
-
-    if (deltaLight > 0) {
-      const spawnCount = Math.min(deltaLight, 6);
-      for (let i = 0; i < spawnCount; i++) {
-        particlesRef.current.push({
-          id: Math.random(),
-          x: startX,
-          y: startY,
-          startX: startX,
-          startY: startY,
-          targetX: centerX,
-          targetY: centerY,
-          type: "light",
-          progress: 0,
-          speed: 0.025 + Math.random() * 0.02,
-          stage: 1,
-          targetNodeIdx: actualAiEnabled ? 1 : 1,
-        });
-      }
-    }
-  }, [actualHeavy, actualLight, actualOutage, actualAiEnabled]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let animationFrameId: number;
+    let animationFrameId = 0;
 
     const handleResize = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     };
+
     handleResize();
     window.addEventListener("resize", handleResize);
 
     const render = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      context.clearRect(0, 0, canvas.width, canvas.height);
 
       const startX = 260;
       const startY = canvas.height / 2;
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
-
       const rightX = canvas.width - 260;
       const nodePositions = [
         { x: rightX, y: centerY - 130 },
@@ -156,64 +105,66 @@ export default function SimulationCanvas({
         { x: rightX, y: centerY + 130 },
       ];
 
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = "rgba(51, 65, 85, 0.4)";
+      context.lineWidth = 1.5;
+      context.beginPath();
+      context.moveTo(startX, startY);
+      context.lineTo(centerX, centerY);
+      context.strokeStyle = "rgba(51, 65, 85, 0.4)";
+      context.stroke();
 
-      ctx.beginPath();
-      ctx.moveTo(startX, startY);
-      ctx.lineTo(centerX, centerY);
-      ctx.stroke();
-
-      nodePositions.forEach((pos, idx) => {
-        const nodeStatus = actualNodes[idx]?.status;
-        ctx.beginPath();
-        ctx.moveTo(centerX, centerY);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.strokeStyle =
-          nodeStatus === "crashed"
+      nodePositions.forEach((position, index) => {
+        context.beginPath();
+        context.moveTo(centerX, centerY);
+        context.lineTo(position.x, position.y);
+        context.strokeStyle =
+          nodesRef.current[index]?.status === "crashed"
             ? "rgba(239, 68, 68, 0.3)"
             : "rgba(51, 65, 85, 0.4)";
-        ctx.stroke();
+        context.stroke();
       });
 
-      if (!actualOutage) {
-        particlesRef.current.forEach((p, index) => {
-          p.progress += p.speed;
+      if (!outageRef.current) {
+        for (let index = particlesRef.current.length - 1; index >= 0; index -= 1) {
+          const particle = particlesRef.current[index];
+          particle.progress += particle.speed;
 
-          if (p.progress >= 1) {
-            if (p.stage === 1) {
-              p.stage = 2;
-              p.progress = 0;
-              p.startX = centerX;
-              p.startY = centerY;
-
-              let targetIdx = 0;
-              if (actualAiEnabled) {
-                targetIdx = p.type === "heavy" ? 0 : 1;
-                if (actualNodes[targetIdx]?.status === "crashed") targetIdx = 2;
-              } else {
-                targetIdx = Math.floor(Math.random() * 3);
-              }
-              p.targetNodeIdx = targetIdx;
-              p.targetX = nodePositions[targetIdx].x;
-              p.targetY = nodePositions[targetIdx].y;
+          if (particle.progress >= 1) {
+            if (particle.stage === 1) {
+              particle.stage = 2;
+              particle.progress = 0;
+              particle.startX = centerX;
+              particle.startY = centerY;
+              particle.targetX = nodePositions[particle.targetNodeIdx].x;
+              particle.targetY = nodePositions[particle.targetNodeIdx].y;
             } else {
               particlesRef.current.splice(index, 1);
-              return;
+              continue;
             }
           }
 
-          p.x = p.startX + (p.targetX - p.startX) * p.progress;
-          p.y = p.startY + (p.targetY - p.startY) * p.progress;
+          particle.x =
+            particle.startX +
+            (particle.targetX - particle.startX) * particle.progress;
+          particle.y =
+            particle.startY +
+            (particle.targetY - particle.startY) * particle.progress;
 
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.type === "heavy" ? 5 : 4, 0, Math.PI * 2);
-          ctx.fillStyle = p.type === "heavy" ? "#ef4444" : "#3b82f6";
-          ctx.shadowColor = p.type === "heavy" ? "#ef4444" : "#3b82f6";
-          ctx.shadowBlur = 10;
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        });
+          context.beginPath();
+          context.arc(
+            particle.x,
+            particle.y,
+            particle.type === "heavy" ? 5 : 4,
+            0,
+            Math.PI * 2,
+          );
+          context.fillStyle =
+            particle.type === "heavy" ? "#ef4444" : "#3b82f6";
+          context.shadowColor =
+            particle.type === "heavy" ? "#ef4444" : "#3b82f6";
+          context.shadowBlur = 10;
+          context.fill();
+          context.shadowBlur = 0;
+        }
       }
 
       animationFrameId = requestAnimationFrame(render);
@@ -225,7 +176,7 @@ export default function SimulationCanvas({
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener("resize", handleResize);
     };
-  }, [actualOutage, actualAiEnabled, actualNodes]);
+  }, []);
 
   return (
     <canvas
@@ -233,4 +184,32 @@ export default function SimulationCanvas({
       className="absolute inset-0 pointer-events-none z-0"
     />
   );
+}
+
+function spawnParticle(
+  event: RoutingEvent,
+  aiEnabled: boolean,
+  canvas: HTMLCanvasElement,
+  particles: Particle[],
+) {
+  const route = aiEnabled ? event.ai_route : event.legacy_route;
+  if (!route.success || route.node_id === null) return;
+
+  const startX = 260;
+  const startY = canvas.height / 2;
+
+  particles.push({
+    id: event.event_id,
+    x: startX,
+    y: startY,
+    startX,
+    startY,
+    targetX: canvas.width / 2,
+    targetY: canvas.height / 2,
+    type: event.task_type,
+    progress: 0,
+    speed: event.task_type === "heavy" ? 0.022 : 0.03,
+    stage: 1,
+    targetNodeIdx: route.node_id,
+  });
 }

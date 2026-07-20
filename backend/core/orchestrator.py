@@ -1,200 +1,369 @@
+from __future__ import annotations
+
+import math
 import random
-from models.schemas import NodeStatus
+from collections import deque
+from copy import deepcopy
+from dataclasses import dataclass, field
+from typing import Any, Literal
+
 from ml.real_ai_engine import real_ai
+from models.schemas import NodeStatus
+
+StrategyName = Literal["ai", "legacy"]
+
+
+@dataclass
+class StrategyMetrics:
+    total_cost: float = 0.0
+    failed_tasks: int = 0
+    successful_tasks: int = 0
+    round_robin_cursor: int = 0
+    latency_samples: deque[float] = field(default_factory=lambda: deque(maxlen=1000))
+
+
+@dataclass
+class RouteOutcome:
+    success: bool
+    node_id: int | None
+    node_name: str | None
+    reason: str
+    estimated_latency_ms: float
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "success": self.success,
+            "node_id": self.node_id,
+            "node_name": self.node_name,
+            "reason": self.reason,
+            "estimated_latency_ms": round(self.estimated_latency_ms, 1),
+        }
+
 
 class MFSOrchestrator:
-    def __init__(self):
-        self.reset_simulation()  # init করার সময় reset কল করা হচ্ছে
+    TICK_MS = 100.0
+    SIM_SPEED_MULTIPLIER = 600.0
+    SERVICE_DECAY_PER_TICK = 1.1
+    RANDOM_SEED = 2026
 
-    def reset_simulation(self):
-        """পুরো সিস্টেম এবং গ্রাফ জিরো (0) থেকে শুরু করার ফাংশন"""
-        self.ai_enabled = True
+    def __init__(self) -> None:
+        self.run_id = 0
+        self.reset_simulation()
+
+    @staticmethod
+    def _new_nodes() -> list[NodeStatus]:
+        return [
+            NodeStatus(id=0, name="Node 1 (Heavy GPU)", type="heavy", load=0.0, temp=35.0, assigned=0, status="healthy", costActive=2.5, costStandby=0.0),
+            NodeStatus(id=1, name="Node 2 (Light CPU)", type="light", load=0.0, temp=30.0, assigned=0, status="healthy", costActive=0.4, costStandby=0.0),
+            NodeStatus(id=2, name="Node 3 (Scaler)", type="dynamic", load=0.0, temp=25.0, assigned=0, status="standby", costActive=1.2, costStandby=0.0),
+        ]
+
+    def reset_simulation(self) -> None:
+        self.run_id += 1
+        self.rng = random.Random(self.RANDOM_SEED)
+        self.ai_enabled = True  # Selects the live view; both benchmark clusters always run.
         self.surge_active = False
         self.anomaly_active = False
-        self.uptime = 100.0
-        self.latency = 5.0
         self.sim_seconds = 0.0
         self.total_heavy = 0
         self.total_light = 0
-        self.failed_tasks = 0
-        self.legacy_cost = 0.0
-        self.optimized_cost = 0.0
-        self.latest_ai_decision = "System Normal. AI Smart Scheduling active."
-        self.cluster_outage = False
-        
-        self.nodes = [
-            NodeStatus(id=0, name="Node 1 (Heavy GPU)", type="heavy", load=0.0, temp=35.0, assigned=0, status="healthy", costActive=2.5, costStandby=0.0),
-            NodeStatus(id=1, name="Node 2 (Light CPU)", type="light", load=0.0, temp=30.0, assigned=0, status="healthy", costActive=0.4, costStandby=0.0),
-            NodeStatus(id=2, name="Node 3 (Scaler)", type="dynamic", load=0.0, temp=25.0, assigned=0, status="standby", costActive=1.2, costStandby=0.0)
-        ]
+        self.latest_ai_decision = "System normal. Explainable smart scheduling is active."
+        self.event_sequence = 0
+        self.routing_events: deque[dict[str, Any]] = deque(maxlen=30)
+        self.ai_nodes = self._new_nodes()
+        self.legacy_nodes = deepcopy(self.ai_nodes)
+        self.ai_metrics = StrategyMetrics()
+        self.legacy_metrics = StrategyMetrics()
+        self._thermal_band = 0
 
-    def update_simulation(self, dt_ms: float):
-        sim_speed_multiplier = 600
-        sim_dt_seconds = (dt_ms / 1000.0) * sim_speed_multiplier
+    def update_simulation(self, dt_ms: float = TICK_MS) -> None:
+        sim_dt_seconds = (dt_ms / 1000.0) * self.SIM_SPEED_MULTIPLIER
         self.sim_seconds += sim_dt_seconds
         sim_dt_hours = sim_dt_seconds / 3600.0
 
-        active_count = sum(1 for n in self.nodes if n.status not in ["standby", "crashed"])
-        self.cluster_outage = (active_count == 0)
+        spawn_chance = 0.70 if self.surge_active else 0.15
+        if self.rng.random() < spawn_chance:
+            self._process_task(self._generate_seeded_task(), source="generated")
 
-        if self.cluster_outage:
-            self.latest_ai_decision = "[CRITICAL OUTAGE]: All cluster nodes CRASHED! Halting transaction flow until automated thermal cooldown..."
-        else:
-            spawn_chance = 0.7 if self.surge_active else 0.15
-            if random.random() < spawn_chance:
-                amount = random.choice([500, 1200, 2500, 5000, 15000, 48000, 50000])
-                tx_type = random.choice([0, 1, 2])
-                account_age = random.randint(0, 60)
-                
-                ai_analysis = real_ai.predict_task_complexity(amount, tx_type, account_age)
-                is_heavy = ai_analysis["is_heavy"]
-                load_to_add = ai_analysis["cpu_load_required"]
-                
-                if is_heavy: self.total_heavy += 1
-                else: self.total_light += 1
-                self.route_task(is_heavy, load_to_add)
+        self._update_cluster("ai", self.ai_nodes, self.ai_metrics, sim_dt_hours)
+        self._update_cluster("legacy", self.legacy_nodes, self.legacy_metrics, sim_dt_hours)
+        self._refresh_decision_log()
 
-        current_latency_sum = 0.0
+    def _generate_seeded_task(self) -> dict[str, Any]:
+        return {
+            "amount": self.rng.choice([500, 1200, 2500, 5000, 15000, 24000, 48000, 50000]),
+            "tx_type": self.rng.choice([0, 1, 2]),
+            "account_age_days": self.rng.randint(0, 720),
+            "mcc": self.rng.choice(["5411", "6011", "4814", "7995"]),
+            "is_vpn": self.rng.random() < (0.12 if self.surge_active else 0.04),
+            "stan": None,
+            "rrn": None,
+        }
 
-        for i, n in enumerate(self.nodes):
-            if n.load > 0:
-                decay = 1.5 if self.ai_enabled else 0.6
-                n.load = max(0.0, n.load - decay)
+    def _process_task(self, task: dict[str, Any], source: str) -> dict[str, Any]:
+        analysis = real_ai.score_transaction(
+            amount=task["amount"],
+            tx_type=task["tx_type"],
+            account_age_days=task["account_age_days"],
+            mcc=task.get("mcc", "5411"),
+            is_vpn=task.get("is_vpn", False),
+        )
 
-            if i == 0 and self.anomaly_active:
-                n.temp += 0.5
-                if n.temp > 75 and random.random() < 0.1 and not self.cluster_outage:
-                    self.latest_ai_decision = real_ai.analyze_anomaly_with_llm(n.name, n.temp, n.load, self.total_heavy)
-            else:
-                if n.load > 75: n.temp += 0.15
-                elif n.temp > 25: n.temp -= 0.2
-
-            if n.temp > 95:
-                n.status = "crashed"
-                n.load = 0.0
-            elif n.temp > 75 and n.status != "crashed":
-                n.status = "warning" if self.ai_enabled else "healthy"
-            elif n.temp <= 75 and n.status == "warning":
-                n.status = "healthy"
-            elif n.temp < 50 and n.status == "crashed":
-                n.status = "healthy"
-                self.latest_ai_decision = f"[SELF-HEALING]: {n.name} cooled down below 50°C. Re-joining cluster operations!"
-
-            if self.ai_enabled and i == 2 and n.status != "crashed":
-                if not self.surge_active and n.load == 0 and self.nodes[0].load < 60 and self.nodes[1].load < 60:
-                    n.status = "standby"
-            elif not self.ai_enabled and i == 2 and n.status == "standby":
-                n.status = "healthy"
-
-            current_latency_sum += n.load * 0.4
-
-        base_latency = 5.0
-        fail_penalty = min(500.0, self.failed_tasks * 10.0) if self.failed_tasks > 0 else 0.0
-        target_latency = base_latency + (current_latency_sum / (active_count or 1)) + fail_penalty
-        self.latency = (self.latency * 0.9) + (target_latency * 0.1)
-
-        total_processed = self.total_heavy + self.total_light
-        target_uptime = 100.0
-        if total_processed > 0:
-            target_uptime = 100.0 - (self.failed_tasks / total_processed) * 100.0
-        self.uptime = (self.uptime * 0.95) + (target_uptime * 0.05)
-
-        current_legacy_rate = sum(n.costActive for n in self.nodes)
-        current_optimized_rate = sum(n.costStandby if n.status == "standby" else n.costActive for n in self.nodes)
-
-        self.legacy_cost += current_legacy_rate * sim_dt_hours
-        self.optimized_cost += current_optimized_rate * sim_dt_hours
-
-    def route_task(self, is_heavy: bool, load_amt: float):
-        if self.cluster_outage:
-            self.failed_tasks += 1
-            return
-
-        dest_idx = 0
-        if self.ai_enabled:
-            if is_heavy:
-                dest_idx = 0 if (self.nodes[0].status == "healthy" and self.nodes[0].load < 85) else 2
-            else:
-                dest_idx = 1 if (self.nodes[1].status == "healthy" and self.nodes[1].load < 85) else 2
-        else:
-            total = self.total_heavy + self.total_light
-            dest_idx = total % 3
-
-        if self.nodes[dest_idx].status == "crashed":
-            healthy_nodes = [idx for idx, n in enumerate(self.nodes) if n.status != "crashed"]
-            if healthy_nodes:
-                dest_idx = healthy_nodes[0]
-            else:
-                self.failed_tasks += 1
-                return
-
-        if self.nodes[dest_idx].status == "standby":
-            self.nodes[dest_idx].status = "healthy"
-        
-        self.nodes[dest_idx].assigned += 1
-        self.nodes[dest_idx].load = min(100.0, self.nodes[dest_idx].load + load_amt)
-    
-    # ⚠️ নতুন ম্যানুয়াল ট্রানজিকশন প্রসেসিং লজিক (রিয়েল-ওয়ার্ল্ড মেটাডেটা সহ)
-    def inject_manual_transaction(self, amount: float, tx_type: int, account_age: int, metadata: dict):
-        if self.cluster_outage:
-            self.failed_tasks += 1
-            return {"status": "failed", "reason": "Cluster Outage"}
-
-        # AI ইঞ্জিন দিয়ে বিশ্লেষণ (মেটাডেটার ওপর ভিত্তি করে জটিলা ঠিক করা হবে)
-        is_vpn = metadata.get("is_vpn", False)
-        mcc = metadata.get("mcc", "5411") # 5411: Grocery, 6011: ATM, 7995: Gambling
-        
-        # রিয়েল-ওয়ার্ল্ড লজিক: যদি VPN অন থাকে অথবা Gambling MCC হয় অথবা অ্যামাউন্ট ২৫,০০০ এর বেশি হয় -> High Risk Heavy Task!
-        is_heavy = (amount > 20000) or is_vpn or (mcc == "7995") or (account_age < 5 and amount > 5000)
-        load_to_add = 15.0 if is_heavy else 4.0
-
-        if is_heavy:
+        if analysis["is_heavy"]:
             self.total_heavy += 1
-            task_name = "HEAVY FRAUD CHECK"
         else:
             self.total_light += 1
-            task_name = "LIGHT FAST-PATH"
 
-        # টাস্ক রাউট করা
-        self.route_task(is_heavy, load_to_add)
+        ai_route = self._route_task("ai", self.ai_nodes, self.ai_metrics, analysis)
+        legacy_route = self._route_task("legacy", self.legacy_nodes, self.legacy_metrics, analysis)
 
-        # সুন্দর রিয়েল-ওয়ার্ল্ড AI লগ তৈরি করা
-        stan = metadata.get("stan", "102938")
-        ip = metadata.get("ip_address", "103.108.x.x")
+        self.event_sequence += 1
+        event = {
+            "event_id": self.event_sequence,
+            "source": source,
+            "task_type": "heavy" if analysis["is_heavy"] else "light",
+            "task_path": analysis["task_path"],
+            "risk_score": analysis["risk_score"],
+            "risk_level": analysis["risk_level"],
+            "factors": analysis["factors"],
+            "amount": task["amount"],
+            "stan": task.get("stan"),
+            "rrn": task.get("rrn"),
+            "ai_route": ai_route.as_dict(),
+            "legacy_route": legacy_route.as_dict(),
+        }
+        self.routing_events.append(event)
+        return event
+
+    def _route_task(
+        self,
+        strategy: StrategyName,
+        nodes: list[NodeStatus],
+        metrics: StrategyMetrics,
+        analysis: dict[str, Any],
+    ) -> RouteOutcome:
+        if all(node.status == "crashed" for node in nodes):
+            metrics.failed_tasks += 1
+            return RouteOutcome(False, None, None, "No available processing node", 500.0)
+
+        if strategy == "ai":
+            preferred_id = 0 if analysis["is_heavy"] else 1
+            preferred = nodes[preferred_id]
+            if preferred.status == "healthy" and preferred.load < 85:
+                destination = preferred
+                reason = f"Task-aware route to the preferred {'GPU' if analysis['is_heavy'] else 'fast-path CPU'} node"
+            else:
+                candidates = [node for node in nodes if node.status != "crashed"]
+                destination = min(
+                    candidates,
+                    key=lambda node: (
+                        0 if node.type == "dynamic" else 1,
+                        0 if node.status == "healthy" else 1,
+                        node.load,
+                        node.temp,
+                    ),
+                )
+                reason = f"Health-aware fallback because {preferred.name} is unavailable, hot, or overloaded"
+        else:
+            ordered = [nodes[(metrics.round_robin_cursor + offset) % len(nodes)] for offset in range(len(nodes))]
+            metrics.round_robin_cursor = (metrics.round_robin_cursor + 1) % len(nodes)
+            destination = next((node for node in ordered if node.status != "crashed"), None)
+            if destination is None:
+                metrics.failed_tasks += 1
+                return RouteOutcome(False, None, None, "Round-robin found no live node", 500.0)
+            reason = "Blind round-robin route; task complexity and thermal warning were not considered"
+
+        if destination.status == "standby":
+            destination.status = "healthy"
+
+        load_to_add = float(analysis["cpu_load_required"])
+        queue_before = destination.load
+        destination.assigned += 1
+        destination.load = min(100.0, destination.load + load_to_add)
+
+        mismatch_penalty = 0.0
+        if analysis["is_heavy"] and destination.type == "light":
+            mismatch_penalty = 35.0
+        elif not analysis["is_heavy"] and destination.type == "heavy":
+            mismatch_penalty = 10.0
+        thermal_penalty = max(0.0, destination.temp - 70.0) * 1.8
+        estimated_latency = 5.0 + queue_before * 0.65 + load_to_add * 0.8 + mismatch_penalty + thermal_penalty
+
+        metrics.successful_tasks += 1
+        metrics.latency_samples.append(estimated_latency)
+        return RouteOutcome(True, destination.id, destination.name, reason, estimated_latency)
+
+    def _update_cluster(
+        self,
+        strategy: StrategyName,
+        nodes: list[NodeStatus],
+        metrics: StrategyMetrics,
+        sim_dt_hours: float,
+    ) -> None:
+        for index, node in enumerate(nodes):
+            if node.load > 0:
+                node.load = max(0.0, node.load - self.SERVICE_DECAY_PER_TICK)
+
+            # Crashed nodes cool regardless of whether the anomaly toggle is still on.
+            if node.status == "crashed":
+                node.temp = max(25.0, node.temp - 0.8)
+                if node.temp < 50.0:
+                    node.status = "standby" if index == 2 and strategy == "ai" else "healthy"
+                continue
+
+            if index == 0 and self.anomaly_active:
+                node.temp += 0.5
+            elif node.load > 75:
+                node.temp += 0.15
+            elif node.temp > 25:
+                node.temp = max(25.0, node.temp - 0.2)
+
+            if node.temp > 95:
+                node.status = "crashed"
+                node.load = 0.0
+            elif node.temp > 75:
+                node.status = "warning"
+            elif node.status == "warning":
+                node.status = "healthy"
+
+        scaler = nodes[2]
+        if strategy == "ai" and scaler.status != "crashed":
+            should_sleep = (
+                not self.surge_active
+                and scaler.load <= 0.1
+                and nodes[0].load < 60
+                and nodes[1].load < 60
+            )
+            if should_sleep:
+                scaler.status = "standby"
+            elif scaler.temp > 75:
+                scaler.status = "warning"
+            else:
+                scaler.status = "healthy"
+        elif strategy == "legacy" and scaler.status == "standby":
+            scaler.status = "healthy"
+
+        metrics.total_cost += self._cost_rate(nodes) * sim_dt_hours
+
+    @staticmethod
+    def _cost_rate(nodes: list[NodeStatus]) -> float:
+        return sum(
+            node.costStandby if node.status in {"standby", "crashed"} else node.costActive
+            for node in nodes
+        )
+
+    def _refresh_decision_log(self) -> None:
+        node = self.ai_nodes[0]
+        band = 3 if node.status == "crashed" else 2 if node.temp >= 85 else 1 if node.temp >= 75 else 0
+        if band != self._thermal_band:
+            self._thermal_band = band
+            if band > 0:
+                self.latest_ai_decision = real_ai.thermal_recommendation(node.name, node.temp, node.load)
+            elif self.anomaly_active:
+                self.latest_ai_decision = "[SELF-HEALING]: Node 1 returned below the warning threshold and can rejoin smart scheduling."
+
+    def inject_manual_transaction(
+        self,
+        amount: float,
+        tx_type: int,
+        account_age_days: int,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        event = self._process_task(
+            {
+                "amount": amount,
+                "tx_type": tx_type,
+                "account_age_days": account_age_days,
+                "mcc": metadata.get("mcc", "5411"),
+                "is_vpn": metadata.get("is_vpn", False),
+                "stan": metadata.get("stan"),
+                "rrn": metadata.get("rrn"),
+            },
+            source="manual",
+        )
+        selected_route = event["ai_route"] if self.ai_enabled else event["legacy_route"]
+        strategy_label = "AI smart scheduler" if self.ai_enabled else "legacy round-robin"
+        factors_text = ", ".join(f"{factor['label']} +{factor['points']}" for factor in event["factors"]) or "No elevated-risk factors"
         self.latest_ai_decision = (
-            f"[MANUAL TX | STAN:{stan}]: ${amount} | MCC:{mcc} | IP:{ip} | VPN:{is_vpn} "
-            f"--> AI Analyzed: {task_name}. Routed instantly!"
+            f"[MANUAL TX | STAN:{metadata.get('stan', 'N/A')}]: Risk {event['risk_score']} ({event['risk_level']}) "
+            f"from {factors_text}. {strategy_label} selected {selected_route['node_name'] or 'no node'}."
         )
 
         return {
-            "status": "success",
-            "is_heavy": is_heavy,
+            "status": "success" if selected_route["success"] else "failed",
+            "strategy": "ai" if self.ai_enabled else "legacy",
+            "is_heavy": event["task_type"] == "heavy",
+            "task_path": event["task_path"],
+            "risk_score": event["risk_score"],
+            "risk_level": event["risk_level"],
+            "risk_factors": event["factors"],
+            "route": selected_route,
+            "comparison": {"ai_route": event["ai_route"], "legacy_route": event["legacy_route"]},
             "decision": self.latest_ai_decision,
-            "stan": stan
+            "stan": metadata.get("stan"),
+            "rrn": metadata.get("rrn"),
         }
 
-    def format_time(self, secs: float) -> str:
-        h = int(secs // 3600)
-        m = int((secs % 3600) // 60)
-        s = int(secs % 60)
-        return f"{h:02d}:{m:02d}:{s:02d}"
+    @staticmethod
+    def _percentile(values: deque[float], percentile: float) -> float:
+        if not values:
+            return 0.0
+        ordered = sorted(values)
+        index = max(0, min(len(ordered) - 1, math.ceil(percentile * len(ordered)) - 1))
+        return ordered[index]
 
-    def get_telemetry(self) -> dict:
-        active_count = sum(1 for n in self.nodes if n.status not in ["standby", "crashed"])
+    def _strategy_summary(self, nodes: list[NodeStatus], metrics: StrategyMetrics) -> dict[str, Any]:
+        samples = list(metrics.latency_samples)
+        avg_latency = sum(samples) / len(samples) if samples else 5.0
+        elapsed_minutes = max(self.sim_seconds / 60.0, 1.0 / 60.0)
         return {
-            "uptime": round(self.uptime, 2),
-            "latency": round(self.latency, 1),
+            "cost": round(metrics.total_cost, 3),
+            "failures": metrics.failed_tasks,
+            "successful_tasks": metrics.successful_tasks,
+            "throughput_tx_per_min": round(metrics.successful_tasks / elapsed_minutes, 2),
+            "avg_latency_ms": round(avg_latency, 1),
+            "p95_latency_ms": round(self._percentile(metrics.latency_samples, 0.95), 1),
+            "max_temperature_c": round(max(node.temp for node in nodes), 1),
+            "active_nodes": sum(1 for node in nodes if node.status not in {"standby", "crashed"}),
+        }
+
+    @staticmethod
+    def format_time(seconds: float) -> str:
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+    def get_telemetry(self) -> dict[str, Any]:
+        ai_summary = self._strategy_summary(self.ai_nodes, self.ai_metrics)
+        legacy_summary = self._strategy_summary(self.legacy_nodes, self.legacy_metrics)
+        selected_nodes = self.ai_nodes if self.ai_enabled else self.legacy_nodes
+        selected_summary = ai_summary if self.ai_enabled else legacy_summary
+        total_tasks = self.total_heavy + self.total_light
+        selected_failures = self.ai_metrics.failed_tasks if self.ai_enabled else self.legacy_metrics.failed_tasks
+        uptime = 100.0 if total_tasks == 0 else max(0.0, 100.0 - (selected_failures / total_tasks) * 100.0)
+        active_count = sum(1 for node in selected_nodes if node.status not in {"standby", "crashed"})
+
+        return {
+            "run_id": self.run_id,
+            "uptime": round(uptime, 2),
+            "latency": selected_summary["avg_latency_ms"],
             "active_nodes": f"{active_count}/3",
             "sim_time": self.format_time(self.sim_seconds),
             "total_heavy": self.total_heavy,
             "total_light": self.total_light,
-            "saved_cost": round(self.legacy_cost - self.optimized_cost, 2),
-            "nodes": [n.model_dump() for n in self.nodes],
+            "legacy_cost": legacy_summary["cost"],
+            "optimized_cost": ai_summary["cost"],
+            "saved_cost": round(legacy_summary["cost"] - ai_summary["cost"], 3),
+            "nodes": [node.model_dump() for node in selected_nodes],
             "ai_enabled": self.ai_enabled,
             "surge_active": self.surge_active,
             "anomaly_active": self.anomaly_active,
             "ai_decision": self.latest_ai_decision,
-            "cluster_outage": self.cluster_outage
+            "cluster_outage": all(node.status == "crashed" for node in selected_nodes),
+            "benchmark": {"ai": ai_summary, "legacy": legacy_summary},
+            "routing_events": list(self.routing_events),
         }
+
 
 orchestrator = MFSOrchestrator()

@@ -1,5 +1,6 @@
 "use client";
-import React, { useState } from "react";
+
+import React, { useEffect, useState } from "react";
 import {
   Brain,
   Zap,
@@ -7,10 +8,11 @@ import {
   Lock,
   Unlock,
   RotateCcw,
-  SendHorizonal,
+  Send,
 } from "lucide-react";
+import axios from "axios";
 import api from "@/services/api";
-import TransactionModal from "./TransactionModal"; // ⚠️ নতুন মডাল ইমপোর্ট
+import TransactionModal from "./TransactionModal";
 
 interface ControlPanelProps {
   aiEnabled: boolean;
@@ -25,45 +27,82 @@ export default function ControlPanel({
 }: ControlPanelProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showTxModal, setShowTxModal] = useState(false); // ⚠️ ট্রানজিকশন মডালের স্টেট
+  const [showTxModal, setShowTxModal] = useState(false);
   const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("hackathon2026");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+
+    api
+      .get("/api/v1/auth/me")
+      .then(() => setIsLoggedIn(true))
+      .catch(() => {
+        localStorage.removeItem("access_token");
+        setIsLoggedIn(false);
+      });
+  }, []);
+
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+
     try {
-      const res = await api.post("/api/v1/auth/login", { username, password });
-      localStorage.setItem("access_token", res.data.access_token);
+      const response = await api.post("/api/v1/auth/login", {
+        username,
+        password,
+      });
+      localStorage.setItem("access_token", response.data.access_token);
       setIsLoggedIn(true);
       setShowLoginModal(false);
+      setPassword("");
       setError("");
-    } catch (err) {
-      setError("Invalid credentials! Try admin / hackathon2026");
+    } catch (caught) {
+      const message = axios.isAxiosError<{ detail?: string }>(caught)
+        ? caught.response?.data?.detail
+        : undefined;
+      setError(message || "Invalid username or password.");
     }
   };
 
-  const toggleAI = () =>
-    api.post("/api/v1/control/toggle-ai").catch(() => setShowLoginModal(true));
-  const toggleSurge = () =>
-    api
-      .post("/api/v1/control/toggle-surge")
-      .catch(() => setShowLoginModal(true));
-  const triggerAnomaly = () =>
-    api
-      .post("/api/v1/control/trigger-anomaly")
-      .catch(() => setShowLoginModal(true));
+  const requireOperator = async (action: () => Promise<unknown>) => {
+    if (!isLoggedIn) {
+      setShowLoginModal(true);
+      return;
+    }
 
-  const handleReset = () => {
-    window.dispatchEvent(new Event("force_reset_ui"));
-    api.post("/api/v1/control/reset").catch(() => setShowLoginModal(true));
+    try {
+      await action();
+    } catch (caught) {
+      if (axios.isAxiosError(caught) && caught.response?.status === 401) {
+        localStorage.removeItem("access_token");
+        setIsLoggedIn(false);
+        setError("Your operator session expired. Please sign in again.");
+        setShowLoginModal(true);
+      }
+    }
+  };
+
+  const handleReset = () =>
+    requireOperator(async () => {
+      window.dispatchEvent(new Event("force_reset_ui"));
+      await api.post("/api/v1/control/reset");
+    });
+
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    setIsLoggedIn(false);
+    setShowTxModal(false);
   };
 
   return (
     <>
       <footer className="glass-panel p-4 flex justify-center items-center gap-3.5 z-20 pointer-events-auto flex-wrap">
         <button
-          onClick={toggleAI}
+          onClick={() =>
+            requireOperator(() => api.post("/api/v1/control/toggle-ai"))
+          }
           className={`flex items-center gap-2 px-5 py-2 rounded-lg font-bold transition-all shadow-lg text-sm ${
             aiEnabled
               ? "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/30"
@@ -71,13 +110,17 @@ export default function ControlPanel({
           }`}
         >
           <Brain
-            className={`w-4 h-4 ${aiEnabled ? "text-white animate-pulse" : "text-slate-400"}`}
+            className={`w-4 h-4 ${aiEnabled ? "animate-pulse" : ""}`}
           />
-          <span>FinCluster AI: {aiEnabled ? "ON" : "OFF (LEGACY)"}</span>
+          <span>
+            Live View: {aiEnabled ? "AI Scheduler" : "Legacy Round-Robin"}
+          </span>
         </button>
 
         <button
-          onClick={toggleSurge}
+          onClick={() =>
+            requireOperator(() => api.post("/api/v1/control/toggle-surge"))
+          }
           className={`flex items-center gap-2 px-5 py-2 rounded-lg font-bold transition-all border text-sm ${
             surgeActive
               ? "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-500/30 border-red-500"
@@ -91,7 +134,11 @@ export default function ControlPanel({
         </button>
 
         <button
-          onClick={triggerAnomaly}
+          onClick={() =>
+            requireOperator(() =>
+              api.post("/api/v1/control/trigger-anomaly"),
+            )
+          }
           className={`flex items-center gap-2 px-5 py-2 rounded-lg font-bold transition-all border text-sm ${
             anomalyActive
               ? "bg-amber-600 hover:bg-amber-500 text-white animate-pulse border-amber-500"
@@ -104,30 +151,31 @@ export default function ControlPanel({
           </span>
         </button>
 
-        {/* ⚠️ নতুন MANUAL TRANSACTION SIMULATOR বাটন ⚠️ */}
         <button
-          onClick={() => setShowTxModal(true)}
+          onClick={() =>
+            isLoggedIn ? setShowTxModal(true) : setShowLoginModal(true)
+          }
           title="Inject realistic transactions with ISO-8583 metadata"
-          className="flex items-center gap-2 px-5 py-2 rounded-lg font-bold transition-all border bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-600 shadow-lg hover:shadow-emerald-900/50 active:scale-95 text-sm"
+          className="flex items-center gap-2 px-5 py-2 rounded-lg font-bold transition-all border bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-600 shadow-lg active:scale-95 text-sm"
         >
-          <SendHorizonal className="w-4 h-4 text-emerald-400 animate-bounce" />
-          <span>⚡ Manual Tx</span>
+          <Send className="w-4 h-4 text-emerald-400" />
+          <span>Manual Tx</span>
         </button>
 
         <button
           onClick={handleReset}
-          title="Reset time, graph and nodes instantly"
-          className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all border bg-rose-950/80 hover:bg-rose-900 text-rose-300 border-rose-700 shadow-lg hover:shadow-rose-900/50 active:scale-95 text-sm"
+          title="Reset both clusters, chart, time, tasks, and routing events"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all border bg-rose-950/80 hover:bg-rose-900 text-rose-300 border-rose-700 shadow-lg active:scale-95 text-sm"
         >
           <RotateCcw className="w-4 h-4 text-rose-400" />
           <span>Reset Sim</span>
         </button>
 
-        <div className="w-px h-6 bg-slate-700 mx-1"></div>
+        <div className="w-px h-6 bg-slate-700 mx-1" />
 
         <button
-          onClick={() =>
-            isLoggedIn ? setIsLoggedIn(false) : setShowLoginModal(true)
+          onClick={
+            isLoggedIn ? handleLogout : () => setShowLoginModal(true)
           }
           className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono hover:border-blue-500 text-slate-300"
         >
@@ -136,24 +184,34 @@ export default function ControlPanel({
           ) : (
             <Lock className="w-3.5 h-3.5 text-amber-400" />
           )}
-          <span>{isLoggedIn ? "Admin Authenticated" : "Admin Login"}</span>
+          <span>
+            {isLoggedIn ? "Operator: Sign out" : "Operator Login"}
+          </span>
         </button>
       </footer>
 
-      {/* ⚠️ ট্রানজিকশন মডাল রেন্ডার */}
       {showTxModal && (
-        <TransactionModal onClose={() => setShowTxModal(false)} />
+        <TransactionModal
+          onClose={() => setShowTxModal(false)}
+          onUnauthorized={() => {
+            localStorage.removeItem("access_token");
+            setIsLoggedIn(false);
+            setShowTxModal(false);
+            setShowLoginModal(true);
+          }}
+        />
       )}
 
-      {/* Login Modal */}
       {showLoginModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center z-50 pointer-events-auto">
           <div className="glass-panel p-6 rounded-xl w-87.5 border border-slate-600 shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
-              <Lock className="w-5 h-5 text-blue-400" /> Admin Authentication
+              <Lock className="w-5 h-5 text-blue-400" />
+              Operator Authentication
             </h3>
             <p className="text-xs text-slate-400 mb-4">
-              Enter JWT credentials to unlock cluster controls.
+              Telemetry is public. A signed operator token is required to
+              change simulation state or inject transactions.
             </p>
 
             {error && (
@@ -163,38 +221,43 @@ export default function ControlPanel({
             )}
 
             <form onSubmit={handleLogin} className="space-y-3">
-              <div>
-                <label className="text-xs text-slate-300 block mb-1">
+              <label className="block">
+                <span className="text-xs text-slate-300 block mb-1">
                   Username
-                </label>
+                </span>
                 <input
                   type="text"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                  onChange={(event) => setUsername(event.target.value)}
+                  autoComplete="username"
+                  className="input-style text-sm"
                 />
-              </div>
-              <div>
-                <label className="text-xs text-slate-300 block mb-1">
+              </label>
+              <label className="block">
+                <span className="text-xs text-slate-300 block mb-1">
                   Password
-                </label>
+                </span>
                 <input
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="current-password"
+                  className="input-style text-sm"
                 />
-              </div>
+              </label>
               <div className="flex gap-2 pt-2">
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded text-sm transition-all"
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded text-sm"
                 >
-                  Login & Generate JWT
+                  Sign in
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowLoginModal(false)}
+                  onClick={() => {
+                    setShowLoginModal(false);
+                    setError("");
+                  }}
                   className="bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 px-4 rounded text-sm"
                 >
                   Cancel
