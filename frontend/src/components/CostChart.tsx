@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -45,28 +45,28 @@ export default function CostChart({
   benchmark,
 }: CostChartProps) {
   const [series, setSeries] = useState<CostSeries>(emptySeries);
-
-  // A backend run ID is the reset signal. Zero savings is a valid metric.
-  useEffect(() => {
-    setSeries(emptySeries());
-  }, [runId]);
+  const previousRunId = useRef(runId);
 
   useEffect(() => {
     const label = simTime.substring(0, 5);
+    // Streaming telemetry is an external source; chart history intentionally
+    // synchronizes it into a bounded local series.
     setSeries((current) => {
-      const lastIndex = current.labels.length - 1;
-      if (current.labels[lastIndex] === label) {
-        const legacy = [...current.legacy];
-        const optimized = [...current.optimized];
+      const base = runId !== previousRunId.current ? emptySeries() : current;
+      previousRunId.current = runId;
+      const lastIndex = base.labels.length - 1;
+      if (base.labels[lastIndex] === label) {
+        const legacy = [...base.legacy];
+        const optimized = [...base.optimized];
         legacy[lastIndex] = legacyCost;
         optimized[lastIndex] = optimizedCost;
-        return { ...current, legacy, optimized };
+        return { ...base, legacy, optimized };
       }
 
       const next: CostSeries = {
-        labels: [...current.labels, label],
-        legacy: [...current.legacy, legacyCost],
-        optimized: [...current.optimized, optimizedCost],
+        labels: [...base.labels, label],
+        legacy: [...base.legacy, legacyCost],
+        optimized: [...base.optimized, optimizedCost],
       };
 
       if (next.labels.length <= 30) return next;
@@ -76,7 +76,13 @@ export default function CostChart({
         optimized: next.optimized.slice(-30),
       };
     });
-  }, [simTime, legacyCost, optimizedCost]);
+  }, [runId, simTime, legacyCost, optimizedCost]);
+
+  useEffect(() => {
+    const handleInstantReset = () => setSeries(emptySeries());
+    window.addEventListener("force_reset_ui", handleInstantReset);
+    return () => window.removeEventListener("force_reset_ui", handleInstantReset);
+  }, []);
 
   const data = {
     labels: series.labels,

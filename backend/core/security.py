@@ -12,16 +12,37 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 load_dotenv()
 
 ALGORITHM = "HS256"
-TOKEN_HOURS = int(os.getenv("ACCESS_TOKEN_HOURS", "12"))
-APP_ENV = os.getenv("APP_ENV", "development").lower()
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-change-me-before-deploy")
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "hackathon2026")
 
-if APP_ENV == "production" and (
-    SECRET_KEY == "dev-only-change-me-before-deploy" or ADMIN_PASSWORD == "hackathon2026"
-):
-    raise RuntimeError("Set SECRET_KEY and ADMIN_PASSWORD environment variables before production startup")
+TOKEN_HOURS = int(
+    os.getenv("ACCESS_TOKEN_HOURS", "12")
+)
+
+APP_ENV = os.getenv(
+    "APP_ENV",
+    "development"
+).lower()
+
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+
+if not SECRET_KEY:
+    raise RuntimeError(
+        "SECRET_KEY environment variable is required"
+    )
+
+
+ADMIN_USERNAME = os.getenv(
+    "ADMIN_USERNAME",
+    "fincluster_admin"
+)
+
+
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+if not ADMIN_PASSWORD:
+    raise RuntimeError(
+        "ADMIN_PASSWORD environment variable is required"
+    )
 
 security_bearer = HTTPBearer(auto_error=False)
 

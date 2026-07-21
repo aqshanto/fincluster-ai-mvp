@@ -26,6 +26,7 @@ export interface RouteOutcome {
 }
 
 export interface RoutingEvent {
+  event_uid: string;
   event_id: number;
   source: "generated" | "manual";
   task_type: "heavy" | "light";
@@ -33,6 +34,11 @@ export interface RoutingEvent {
   risk_score: number;
   risk_level: "low" | "medium" | "high";
   factors: RiskFactor[];
+  classifier_source: string;
+  model_name: string;
+  confidence: number;
+  api_used: boolean;
+  fallback_reason: string | null;
   amount: number;
   stan: string | null;
   rrn: string | null;
@@ -56,6 +62,46 @@ export interface BenchmarkData {
   legacy: StrategyBenchmark;
 }
 
+export interface LocalModelMetrics {
+  accuracy: number;
+  precision: number;
+  recall: number;
+  roc_auc: number;
+  training_rows: number;
+  validation_rows: number;
+}
+
+export interface LocalModelStatus {
+  available: boolean;
+  model_name: string;
+  dataset_source: string;
+  metrics: LocalModelMetrics | null;
+  error: string | null;
+}
+
+export interface AIRuntimeStatus {
+  auto_engine: "local_ml";
+  manual_engine: "local_ml" | "gemini_api";
+  external_ai_available: boolean;
+  external_ai_enabled: boolean;
+  external_model: string;
+  api_calls: number;
+  cache_hits: number;
+  fallbacks: number;
+  last_error: string | null;
+  local_model: LocalModelStatus;
+}
+
+export interface DatasetStatus {
+  rows: number;
+  reviewed_rows: number;
+  max_rows: number;
+  auto_sample_every: number;
+  storage: string;
+  contains_sensitive_identifiers: boolean;
+  last_error: string | null;
+}
+
 export interface TelemetryData {
   run_id: number;
   uptime: number;
@@ -75,16 +121,25 @@ export interface TelemetryData {
   cluster_outage: boolean;
   benchmark: BenchmarkData;
   routing_events: RoutingEvent[];
+  ai_runtime: AIRuntimeStatus;
+  dataset: DatasetStatus;
 }
 
 export interface ManualTransactionResult {
   status: "success" | "failed";
+  event_uid: string;
+  event_id: number;
   strategy: "ai" | "legacy";
   is_heavy: boolean;
   task_path: string;
   risk_score: number;
   risk_level: "low" | "medium" | "high";
   risk_factors: RiskFactor[];
+  classifier_source: string;
+  model_name: string;
+  confidence: number;
+  api_used: boolean;
+  fallback_reason: string | null;
   route: RouteOutcome;
   comparison: {
     ai_route: RouteOutcome;

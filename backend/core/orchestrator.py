@@ -7,7 +7,9 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from ml.real_ai_engine import real_ai
+from core.transaction_store import transaction_store
+from ml.hybrid_ai_engine import hybrid_ai
+from ml.rule_engine import rule_engine
 from models.schemas import NodeStatus
 
 StrategyName = Literal["ai", "legacy"]
@@ -53,9 +55,9 @@ class MFSOrchestrator:
     @staticmethod
     def _new_nodes() -> list[NodeStatus]:
         return [
-            NodeStatus(id=0, name="Node 1 (Heavy GPU)", type="heavy", load=0.0, temp=35.0, assigned=0, status="healthy", costActive=2.5, costStandby=0.0),
-            NodeStatus(id=1, name="Node 2 (Light CPU)", type="light", load=0.0, temp=30.0, assigned=0, status="healthy", costActive=0.4, costStandby=0.0),
-            NodeStatus(id=2, name="Node 3 (Scaler)", type="dynamic", load=0.0, temp=25.0, assigned=0, status="standby", costActive=1.2, costStandby=0.0),
+            NodeStatus(id=0, name="Node 1 (Heavy GPU)", type="heavy", load=0.0, temp=35.0, assigned=0, status="healthy", costActive=2.5, costStandby=0.15),
+            NodeStatus(id=1, name="Node 2 (Light CPU)", type="light", load=0.0, temp=30.0, assigned=0, status="healthy", costActive=0.4, costStandby=0.05),
+            NodeStatus(id=2, name="Node 3 (Scaler)", type="dynamic", load=0.0, temp=25.0, assigned=0, status="standby", costActive=1.2, costStandby=0.08),
         ]
 
     def reset_simulation(self) -> None:
@@ -67,7 +69,7 @@ class MFSOrchestrator:
         self.sim_seconds = 0.0
         self.total_heavy = 0
         self.total_light = 0
-        self.latest_ai_decision = "System normal. Explainable smart scheduling is active."
+        self.latest_ai_decision = "System normal. Local ML classification and explainable smart scheduling are active."
         self.event_sequence = 0
         self.routing_events: deque[dict[str, Any]] = deque(maxlen=30)
         self.ai_nodes = self._new_nodes()
@@ -100,14 +102,20 @@ class MFSOrchestrator:
             "rrn": None,
         }
 
-    def _process_task(self, task: dict[str, Any], source: str) -> dict[str, Any]:
-        analysis = real_ai.score_transaction(
-            amount=task["amount"],
-            tx_type=task["tx_type"],
-            account_age_days=task["account_age_days"],
-            mcc=task.get("mcc", "5411"),
-            is_vpn=task.get("is_vpn", False),
-        )
+    def _process_task(
+        self,
+        task: dict[str, Any],
+        source: str,
+        analysis: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if analysis is None:
+            analysis = hybrid_ai.score_auto(
+                amount=task["amount"],
+                tx_type=task["tx_type"],
+                account_age_days=task["account_age_days"],
+                mcc=task.get("mcc", "5411"),
+                is_vpn=task.get("is_vpn", False),
+            )
 
         if analysis["is_heavy"]:
             self.total_heavy += 1
@@ -119,6 +127,7 @@ class MFSOrchestrator:
 
         self.event_sequence += 1
         event = {
+            "event_uid": f"{self.run_id}:{self.event_sequence}",
             "event_id": self.event_sequence,
             "source": source,
             "task_type": "heavy" if analysis["is_heavy"] else "light",
@@ -126,6 +135,11 @@ class MFSOrchestrator:
             "risk_score": analysis["risk_score"],
             "risk_level": analysis["risk_level"],
             "factors": analysis["factors"],
+            "classifier_source": analysis.get("classifier_source", "unknown"),
+            "model_name": analysis.get("model_name", "unknown"),
+            "confidence": analysis.get("confidence", 0.0),
+            "api_used": analysis.get("api_used", False),
+            "fallback_reason": analysis.get("fallback_reason"),
             "amount": task["amount"],
             "stan": task.get("stan"),
             "rrn": task.get("rrn"),
@@ -133,6 +147,7 @@ class MFSOrchestrator:
             "legacy_route": legacy_route.as_dict(),
         }
         self.routing_events.append(event)
+        transaction_store.record(event=event, task=task, analysis=analysis)
         return event
 
     def _route_task(
@@ -157,8 +172,8 @@ class MFSOrchestrator:
                 destination = min(
                     candidates,
                     key=lambda node: (
-                        0 if node.type == "dynamic" else 1,
                         0 if node.status == "healthy" else 1,
+                        0 if node.type == "dynamic" else 1,
                         node.load,
                         node.temp,
                     ),
@@ -258,7 +273,7 @@ class MFSOrchestrator:
         if band != self._thermal_band:
             self._thermal_band = band
             if band > 0:
-                self.latest_ai_decision = real_ai.thermal_recommendation(node.name, node.temp, node.load)
+                self.latest_ai_decision = rule_engine.thermal_recommendation(node.name, node.temp, node.load)
             elif self.anomaly_active:
                 self.latest_ai_decision = "[SELF-HEALING]: Node 1 returned below the warning threshold and can rejoin smart scheduling."
 
@@ -268,6 +283,7 @@ class MFSOrchestrator:
         tx_type: int,
         account_age_days: int,
         metadata: dict[str, Any],
+        analysis: dict[str, Any],
     ) -> dict[str, Any]:
         event = self._process_task(
             {
@@ -280,23 +296,36 @@ class MFSOrchestrator:
                 "rrn": metadata.get("rrn"),
             },
             source="manual",
+            analysis=analysis,
         )
         selected_route = event["ai_route"] if self.ai_enabled else event["legacy_route"]
         strategy_label = "AI smart scheduler" if self.ai_enabled else "legacy round-robin"
-        factors_text = ", ".join(f"{factor['label']} +{factor['points']}" for factor in event["factors"]) or "No elevated-risk factors"
+        factors_text = ", ".join(
+            f"{factor['label']} +{factor['points']}" for factor in event["factors"]
+        ) or "No elevated-risk factors"
+        engine_label = event["model_name"]
+        fallback_text = f" Fallback: {event['fallback_reason']}." if event.get("fallback_reason") else ""
         self.latest_ai_decision = (
-            f"[MANUAL TX | STAN:{metadata.get('stan', 'N/A')}]: Risk {event['risk_score']} ({event['risk_level']}) "
-            f"from {factors_text}. {strategy_label} selected {selected_route['node_name'] or 'no node'}."
+            f"[MANUAL TX | STAN:{metadata.get('stan', 'N/A')} | {engine_label}]: "
+            f"Risk {event['risk_score']} ({event['risk_level']}) from {factors_text}. "
+            f"{strategy_label} selected {selected_route['node_name'] or 'no node'}.{fallback_text}"
         )
 
         return {
             "status": "success" if selected_route["success"] else "failed",
+            "event_uid": event["event_uid"],
+            "event_id": event["event_id"],
             "strategy": "ai" if self.ai_enabled else "legacy",
             "is_heavy": event["task_type"] == "heavy",
             "task_path": event["task_path"],
             "risk_score": event["risk_score"],
             "risk_level": event["risk_level"],
             "risk_factors": event["factors"],
+            "classifier_source": event["classifier_source"],
+            "model_name": event["model_name"],
+            "confidence": event["confidence"],
+            "api_used": event["api_used"],
+            "fallback_reason": event["fallback_reason"],
             "route": selected_route,
             "comparison": {"ai_route": event["ai_route"], "legacy_route": event["legacy_route"]},
             "decision": self.latest_ai_decision,
@@ -363,6 +392,8 @@ class MFSOrchestrator:
             "cluster_outage": all(node.status == "crashed" for node in selected_nodes),
             "benchmark": {"ai": ai_summary, "legacy": legacy_summary},
             "routing_events": list(self.routing_events),
+            "ai_runtime": hybrid_ai.status(),
+            "dataset": transaction_store.stats(),
         }
 
 

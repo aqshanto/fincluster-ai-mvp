@@ -36,6 +36,7 @@ export default function TransactionModal({
   const [lastResult, setLastResult] =
     useState<ManualTransactionResult | null>(null);
   const [error, setError] = useState("");
+  const [feedbackMessage, setFeedbackMessage] = useState("");
 
   const applyPreset = (type: "normal" | "cashout" | "fraud") => {
     if (type === "normal") {
@@ -66,6 +67,7 @@ export default function TransactionModal({
 
     setLastResult(null);
     setError("");
+    setFeedbackMessage("");
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -119,6 +121,19 @@ export default function TransactionModal({
       setError(message || "Transaction injection failed.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const submitFeedback = async (reviewedLabel: "heavy" | "light") => {
+    if (!lastResult) return;
+    try {
+      await api.post("/api/v1/ai/feedback", {
+        event_uid: lastResult.event_uid,
+        reviewed_label: reviewedLabel,
+      });
+      setFeedbackMessage(`Saved human label: ${reviewedLabel}`);
+    } catch {
+      setFeedbackMessage("Could not save feedback.");
     }
   };
 
@@ -284,6 +299,10 @@ export default function TransactionModal({
                   {lastResult.task_path}
                 </p>
                 <p className="text-slate-400 mt-0.5">
+                  Engine: <span className="text-cyan-300">{lastResult.model_name}</span>
+                  {lastResult.fallback_reason ? " (local fallback)" : ""}
+                </p>
+                <p className="text-slate-400 mt-0.5">
                   Risk score:{" "}
                   <span className="text-amber-400 font-bold">
                     {lastResult.risk_score}
@@ -318,6 +337,12 @@ export default function TransactionModal({
               )}
             </div>
 
+            {lastResult.fallback_reason && (
+              <p className="mt-3 p-2 rounded bg-amber-950/50 border border-amber-800 text-amber-200">
+                External API fallback: {lastResult.fallback_reason}
+              </p>
+            )}
+
             <div className="mt-3 p-2 rounded bg-blue-950/50 border border-blue-800 text-blue-200">
               <p className="font-bold">
                 Actual {lastResult.strategy.toUpperCase()} route:{" "}
@@ -330,6 +355,27 @@ export default function TransactionModal({
                 Estimated latency:{" "}
                 {lastResult.route.estimated_latency_ms} ms
               </p>
+            </div>
+
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-slate-500">Human label:</span>
+              <button
+                type="button"
+                onClick={() => submitFeedback("heavy")}
+                className="px-2 py-1 rounded bg-rose-950 border border-rose-800 text-rose-300"
+              >
+                Heavy
+              </button>
+              <button
+                type="button"
+                onClick={() => submitFeedback("light")}
+                className="px-2 py-1 rounded bg-emerald-950 border border-emerald-800 text-emerald-300"
+              >
+                Light
+              </button>
+              {feedbackMessage && (
+                <span className="text-cyan-300">{feedbackMessage}</span>
+              )}
             </div>
           </div>
         )}

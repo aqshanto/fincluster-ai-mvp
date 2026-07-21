@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, IPvAnyAddress, field_validator
 
 
 class LoginRequest(BaseModel):
@@ -16,21 +16,31 @@ class TokenResponse(BaseModel):
 
 
 class TransactionMetadata(BaseModel):
-    stan: str
-    rrn: str
-    mcc: str
-    terminal_id: str
-    device_id: str
-    ip_address: str
+    stan: str = Field(pattern=r"^\d{6}$")
+    rrn: str = Field(pattern=r"^\d{12}$")
+    mcc: str = Field(pattern=r"^\d{4}$")
+    terminal_id: str = Field(min_length=1, max_length=64)
+    device_id: str = Field(min_length=1, max_length=64)
+    ip_address: IPvAnyAddress
     is_vpn: bool
-    location: str
+    location: str = Field(min_length=1, max_length=100)
+
+    @field_validator("terminal_id", "device_id", "location")
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        return value.strip()
 
 
 class ManualTxRequest(BaseModel):
-    amount: float = Field(gt=0)
+    amount: float = Field(gt=0, le=1_000_000)
     tx_type: Literal[0, 1, 2]
-    account_age_days: int = Field(ge=0)
+    account_age_days: int = Field(ge=0, le=36_500)
     metadata: TransactionMetadata
+
+
+class ClassificationFeedbackRequest(BaseModel):
+    event_uid: str = Field(pattern=r"^\d+:\d+$", max_length=40)
+    reviewed_label: Literal["heavy", "light"]
 
 
 class NodeStatus(BaseModel):

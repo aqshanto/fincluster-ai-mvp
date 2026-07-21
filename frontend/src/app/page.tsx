@@ -21,23 +21,52 @@ import SimulationCanvas from "@/components/SimulationCanvas";
 export default function Home() {
   const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
   const [recoveryError, setRecoveryError] = useState("");
+  const [connectionStatus, setConnectionStatus] = useState<
+    "connecting" | "connected" | "disconnected"
+  >("connecting");
 
   useEffect(() => {
     const wsUrl =
       process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws/telemetry";
-    const websocket = new WebSocket(wsUrl);
+    let websocket: WebSocket | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+    let retryAttempt = 0;
 
-    websocket.onmessage = (event) => {
-      try {
-        setTelemetry(JSON.parse(event.data) as TelemetryData);
-      } catch (caught) {
-        console.error("Failed to parse telemetry data:", caught);
-      }
+    const connect = () => {
+      if (stopped) return;
+      setConnectionStatus("connecting");
+      websocket = new WebSocket(wsUrl);
+
+      websocket.onopen = () => {
+        retryAttempt = 0;
+        setConnectionStatus("connected");
+      };
+
+      websocket.onmessage = (event) => {
+        try {
+          setTelemetry(JSON.parse(event.data) as TelemetryData);
+        } catch (caught) {
+          console.error("Failed to parse telemetry data:", caught);
+        }
+      };
+
+      websocket.onerror = () => websocket?.close();
+      websocket.onclose = () => {
+        if (stopped) return;
+        setConnectionStatus("disconnected");
+        const delay = Math.min(1000 * 2 ** retryAttempt, 10_000);
+        retryAttempt += 1;
+        retryTimer = setTimeout(connect, delay);
+      };
     };
 
-    websocket.onerror = (caught) => console.error("WebSocket error:", caught);
-
-    return () => websocket.close();
+    connect();
+    return () => {
+      stopped = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      websocket?.close();
+    };
   }, []);
 
   const emergencyAction = async (path: string, reset = false) => {
@@ -63,7 +92,7 @@ export default function Home() {
   return (
     <div className="relative h-screen w-screen flex flex-col justify-between overflow-hidden">
       <SimulationCanvas telemetry={telemetry} />
-      <Header telemetry={telemetry} />
+      <Header telemetry={telemetry} connectionStatus={connectionStatus} />
 
       {telemetry?.cluster_outage && (
         <div className="absolute inset-0 bg-red-950/70 backdrop-blur-md z-15 flex items-center justify-center pointer-events-none">
@@ -205,6 +234,10 @@ export default function Home() {
         aiEnabled={telemetry?.ai_enabled ?? true}
         surgeActive={telemetry?.surge_active ?? false}
         anomalyActive={telemetry?.anomaly_active ?? false}
+        externalAIEnabled={telemetry?.ai_runtime.external_ai_enabled ?? false}
+        externalAIAvailable={telemetry?.ai_runtime.external_ai_available ?? false}
+        externalModel={telemetry?.ai_runtime.external_model ?? "Gemini"}
+        datasetRows={telemetry?.dataset.rows ?? 0}
       />
     </div>
   );

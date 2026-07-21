@@ -9,6 +9,8 @@ import {
   Unlock,
   RotateCcw,
   Send,
+  Cloud,
+  Database,
 } from "lucide-react";
 import axios from "axios";
 import api from "@/services/api";
@@ -18,12 +20,20 @@ interface ControlPanelProps {
   aiEnabled: boolean;
   surgeActive: boolean;
   anomalyActive: boolean;
+  externalAIEnabled: boolean;
+  externalAIAvailable: boolean;
+  externalModel: string;
+  datasetRows: number;
 }
 
 export default function ControlPanel({
   aiEnabled,
   surgeActive,
   anomalyActive,
+  externalAIEnabled,
+  externalAIAvailable,
+  externalModel,
+  datasetRows,
 }: ControlPanelProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -31,6 +41,8 @@ export default function ControlPanel({
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -74,13 +86,19 @@ export default function ControlPanel({
 
     try {
       await action();
+      setActionMessage("");
     } catch (caught) {
       if (axios.isAxiosError(caught) && caught.response?.status === 401) {
         localStorage.removeItem("access_token");
         setIsLoggedIn(false);
         setError("Your operator session expired. Please sign in again.");
         setShowLoginModal(true);
+        return;
       }
+      const detail = axios.isAxiosError<{ detail?: string }>(caught)
+        ? caught.response?.data?.detail
+        : undefined;
+      setActionMessage(detail || "Control action failed. Check the backend connection.");
     }
   };
 
@@ -88,6 +106,27 @@ export default function ControlPanel({
     requireOperator(async () => {
       window.dispatchEvent(new Event("force_reset_ui"));
       await api.post("/api/v1/control/reset");
+    });
+
+
+  const handleExportDataset = () =>
+    requireOperator(async () => {
+      setExporting(true);
+      try {
+        const response = await api.get("/api/v1/ai/dataset.csv", {
+          responseType: "blob",
+        });
+        const url = URL.createObjectURL(response.data);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = "fincluster-training-data.csv";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      } finally {
+        setExporting(false);
+      }
     });
 
   const handleLogout = () => {
@@ -115,6 +154,29 @@ export default function ControlPanel({
           <span>
             Live View: {aiEnabled ? "AI Scheduler" : "Legacy Round-Robin"}
           </span>
+        </button>
+
+
+        <button
+          onClick={() =>
+            requireOperator(() =>
+              api.post("/api/v1/control/toggle-external-ai"),
+            )
+          }
+          disabled={!externalAIAvailable}
+          title={
+            externalAIAvailable
+              ? `Manual transactions only: ${externalModel}`
+              : "Set GEMINI_API_KEY on the backend to enable manual API review"
+          }
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all border text-sm disabled:cursor-not-allowed disabled:opacity-45 ${
+            externalAIEnabled
+              ? "bg-violet-600 hover:bg-violet-500 text-white border-violet-400 shadow-lg shadow-violet-500/30"
+              : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-600"
+          }`}
+        >
+          <Cloud className="w-4 h-4" />
+          <span>Manual AI API: {externalAIEnabled ? "ON" : "OFF"}</span>
         </button>
 
         <button
@@ -171,6 +233,16 @@ export default function ControlPanel({
           <span>Reset Sim</span>
         </button>
 
+
+        <button
+          onClick={handleExportDataset}
+          title="Export privacy-safe collected features and reviewed labels"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all border bg-slate-900 hover:bg-slate-800 text-cyan-300 border-cyan-800 text-sm"
+        >
+          <Database className="w-4 h-4" />
+          <span>{exporting ? "Exporting..." : `Dataset ${datasetRows}`}</span>
+        </button>
+
         <div className="w-px h-6 bg-slate-700 mx-1" />
 
         <button
@@ -188,6 +260,11 @@ export default function ControlPanel({
             {isLoggedIn ? "Operator: Sign out" : "Operator Login"}
           </span>
         </button>
+        {actionMessage && (
+          <p className="basis-full text-center text-[11px] text-amber-300">
+            {actionMessage}
+          </p>
+        )}
       </footer>
 
       {showTxModal && (

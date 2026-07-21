@@ -39,6 +39,7 @@ export default function TransactionSimulatorPage() {
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [feedbackMessage, setFeedbackMessage] = useState("");
 
   useEffect(() => {
     if (!localStorage.getItem("access_token")) return;
@@ -108,6 +109,7 @@ export default function TransactionSimulatorPage() {
     }
 
     setLastTx(null);
+    setFeedbackMessage("");
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -166,6 +168,19 @@ export default function TransactionSimulatorPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const submitFeedback = async (reviewedLabel: "heavy" | "light") => {
+    if (!lastTx) return;
+    try {
+      await api.post("/api/v1/ai/feedback", {
+        event_uid: lastTx.event_uid,
+        reviewed_label: reviewedLabel,
+      });
+      setFeedbackMessage(`Saved human label: ${reviewedLabel}`);
+    } catch {
+      setFeedbackMessage("Could not save feedback.");
     }
   };
 
@@ -387,6 +402,10 @@ export default function TransactionSimulatorPage() {
                 RRN {lastTx.rrn}
               </span>
             </div>
+            <p className="text-[10px] mt-2 text-cyan-300">
+              Engine: {lastTx.model_name}
+              {lastTx.fallback_reason ? " (local fallback)" : ""}
+            </p>
             <p className="text-[11px] mt-2">
               Risk {lastTx.risk_score}:{" "}
               {lastTx.risk_factors.length
@@ -404,6 +423,29 @@ export default function TransactionSimulatorPage() {
             <p className="text-[10px] mt-1 opacity-90">
               {lastTx.route.reason}
             </p>
+            {lastTx.fallback_reason && (
+              <p className="text-[10px] mt-2 text-amber-300">
+                External API fallback: {lastTx.fallback_reason}
+              </p>
+            )}
+            <div className="mt-3 flex items-center gap-2 text-[10px]">
+              <span className="opacity-75">Human label:</span>
+              <button
+                type="button"
+                onClick={() => submitFeedback("heavy")}
+                className="px-2 py-1 rounded bg-rose-950 border border-rose-700"
+              >
+                Heavy
+              </button>
+              <button
+                type="button"
+                onClick={() => submitFeedback("light")}
+                className="px-2 py-1 rounded bg-emerald-950 border border-emerald-700"
+              >
+                Light
+              </button>
+              {feedbackMessage && <span>{feedbackMessage}</span>}
+            </div>
           </div>
         )}
       </div>
