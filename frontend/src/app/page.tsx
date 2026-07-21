@@ -177,14 +177,23 @@ export default function Home() {
 
         <div className="absolute left-1/2 top-[45%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center pointer-events-auto">
           {telemetry?.ai_decision && !telemetry.cluster_outage && (
-            <div className="absolute -top-16 w-137.5 bg-blue-950/90 border border-blue-500/50 p-2.5 rounded-lg shadow-2xl backdrop-blur-md flex items-center gap-3">
-              <div className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-ping shrink-0" />
-              <p className="text-[11px] text-blue-200 font-mono leading-relaxed truncate">
-                <span className="font-bold text-white uppercase">
-                  Decision Log:{" "}
-                </span>
-                {telemetry.ai_decision}
-              </p>
+            <div className="absolute bottom-[calc(100%+1.5rem)] w-[clamp(520px,46vw,760px)] rounded-xl border border-blue-500/50 bg-blue-950/95 p-3 shadow-2xl backdrop-blur-md">
+              <div className="flex items-start gap-3">
+                <div className="relative mt-1.5 h-3 w-3 shrink-0">
+                  <div className="absolute inset-0 rounded-full bg-blue-400/50 animate-ping" />
+                  <div className="absolute inset-0 rounded-full bg-blue-400" />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-300">
+                    Decision Log
+                  </p>
+
+                  <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-words pr-1 font-mono text-[11px] leading-5 text-blue-100">
+                    {telemetry.ai_decision}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
@@ -235,7 +244,9 @@ export default function Home() {
         surgeActive={telemetry?.surge_active ?? false}
         anomalyActive={telemetry?.anomaly_active ?? false}
         externalAIEnabled={telemetry?.ai_runtime.external_ai_enabled ?? false}
-        externalAIAvailable={telemetry?.ai_runtime.external_ai_available ?? false}
+        externalAIAvailable={
+          telemetry?.ai_runtime.external_ai_available ?? false
+        }
         externalModel={telemetry?.ai_runtime.external_model ?? "Gemini"}
         datasetRows={telemetry?.dataset.rows ?? 0}
       />
