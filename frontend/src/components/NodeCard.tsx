@@ -31,7 +31,7 @@ export default function NodeCard({ node }: NodeCardProps) {
   }
 
   return (
-    <div className="bg-slate-900/90 border border-slate-700 rounded-lg p-3 w-[300px] transition-all duration-300 shadow-lg pointer-events-auto">
+    <div className="bg-slate-900/90 border border-slate-700 rounded-lg p-3 w-75 transition-all duration-300 shadow-lg pointer-events-auto">
       <div className="flex justify-between items-start mb-2">
         <div>
           <h4 className="text-sm font-bold text-slate-200">{node.name}</h4>
