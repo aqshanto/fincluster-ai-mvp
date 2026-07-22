@@ -1,1 +1,1 @@
-xgboost-cpu>=3.0,<4.0
+xgboost>=3.2,<4.0

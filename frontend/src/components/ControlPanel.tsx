@@ -11,10 +11,12 @@ import {
   Send,
   Cloud,
   Database,
+  ClipboardCheck,
 } from "lucide-react";
 import axios from "axios";
 import api from "@/services/api";
 import TransactionModal from "./TransactionModal";
+import ReviewQueueModal from "./ReviewQueueModal";
 
 interface ControlPanelProps {
   aiEnabled: boolean;
@@ -24,6 +26,7 @@ interface ControlPanelProps {
   externalAIAvailable: boolean;
   externalModel: string;
   datasetRows: number;
+  pendingReviewCount: number;
 }
 
 export default function ControlPanel({
@@ -34,10 +37,12 @@ export default function ControlPanel({
   externalAIAvailable,
   externalModel,
   datasetRows,
+  pendingReviewCount,
 }: ControlPanelProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showTxModal, setShowTxModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -133,6 +138,7 @@ export default function ControlPanel({
     localStorage.removeItem("access_token");
     setIsLoggedIn(false);
     setShowTxModal(false);
+    setShowReviewModal(false);
   };
 
   return (
@@ -225,6 +231,21 @@ export default function ControlPanel({
         </button>
 
         <button
+          onClick={() =>
+            isLoggedIn ? setShowReviewModal(true) : setShowLoginModal(true)
+          }
+          title="Review uncertain manual transactions before routing"
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all border text-sm ${
+            pendingReviewCount > 0
+              ? "bg-amber-950 hover:bg-amber-900 text-amber-300 border-amber-600 shadow-lg shadow-amber-500/20"
+              : "bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700"
+          }`}
+        >
+          <ClipboardCheck className="w-4 h-4" />
+          <span>Reviews {pendingReviewCount}</span>
+        </button>
+
+        <button
           onClick={handleReset}
           title="Reset both clusters, chart, time, tasks, and routing events"
           className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all border bg-rose-950/80 hover:bg-rose-900 text-rose-300 border-rose-700 shadow-lg active:scale-95 text-sm"
@@ -274,6 +295,18 @@ export default function ControlPanel({
             localStorage.removeItem("access_token");
             setIsLoggedIn(false);
             setShowTxModal(false);
+            setShowLoginModal(true);
+          }}
+        />
+      )}
+
+      {showReviewModal && (
+        <ReviewQueueModal
+          onClose={() => setShowReviewModal(false)}
+          onUnauthorized={() => {
+            localStorage.removeItem("access_token");
+            setIsLoggedIn(false);
+            setShowReviewModal(false);
             setShowLoginModal(true);
           }}
         />

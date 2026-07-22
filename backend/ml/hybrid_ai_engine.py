@@ -62,7 +62,10 @@ class HybridAIEngine:
 
     def score_auto(self, **features: Any) -> dict[str, Any]:
         """Auto simulation always stays local, fast, deterministic, and free."""
-        return local_model.score_transaction(**features)
+        result = local_model.score_transaction(**features)
+        result["review_required"] = False
+        result["review_reasons"] = []
+        return result
 
     @staticmethod
     def _cache_key(
@@ -139,6 +142,21 @@ class HybridAIEngine:
         self.consecutive_failures = 0
         self.last_error = None
         self.api_calls += 1
+        local_label = local_result.get(
+            "predicted_label", "heavy" if local_result.get("is_heavy") else "light"
+        )
+        api_label = "heavy" if result.get("is_heavy") else "light"
+        review_reasons = list(result.get("review_reasons") or [])
+        if local_label != api_label:
+            review_reasons.append(
+                f"Local model predicted {local_label}, but the external AI predicted {api_label}"
+            )
+        if float(result.get("confidence", 0.0)) < local_model.review_confidence_threshold:
+            review_reasons.append("External AI confidence is below the human-review threshold")
+        result["predicted_label"] = api_label
+        result["review_required"] = bool(review_reasons) and local_model.review_enabled
+        result["review_reasons"] = review_reasons
+        result["local_model_prediction"] = local_label
         self._put_cached(key, result)
         return result
 
@@ -260,6 +278,10 @@ class HybridAIEngine:
             "classifier_source": "gemini_api",
             "model_name": self.api_model,
             "confidence": round(abs(decision.risk_score / 100.0 - 0.5) * 2.0, 3),
+            "model_probability": round(decision.risk_score / 100.0, 6),
+            "predicted_label": "heavy" if is_heavy else "light",
+            "review_required": False,
+            "review_reasons": [],
             "api_used": True,
             "api_latency_ms": round(latency_ms, 1),
             "fallback_reason": None,

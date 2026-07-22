@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import os
 from dataclasses import dataclass
 from typing import Any, Sequence
 import importlib.util
@@ -303,9 +303,14 @@ def train_and_select_model(
         test_rows=len(x_test),
         evaluation_split="held_out_test",
     )
+    model_version = os.getenv(
+        "MODEL_VERSION",
+        "v2"
+    )
+
     display_names = {
-        "random_forest": f"RandomForestClassifier-{dataset_label}-v2",
-        "xgboost": f"XGBClassifier-{dataset_label}-v2",
+        "random_forest": f"RandomForestClassifier-{dataset_label}-{model_version}",
+        "xgboost": f"XGBClassifier-{dataset_label}-{model_version}",
     }
     return ModelSelection(
         model=selected_model,

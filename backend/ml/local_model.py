@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import os
 import random
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -25,10 +26,9 @@ except ImportError:  # pragma: no cover - deployment fallback is tested elsewher
 class LocalTransactionClassifier:
     """Local heavy/light classifier with Random Forest and XGBoost candidates.
 
-    When no reviewed artifact is configured, the classifier generates a seeded
-    synthetic MFS workload, trains the requested local candidate(s), tunes each
-    probability threshold on a validation split, and selects the stronger model.
-    The winner is then evaluated once on a held-out test split.
+    The runtime model never learns from its own predictions. Human-reviewed
+    labels are used by the controlled batch retraining manager, which can load a
+    promoted artifact without interrupting transaction scoring.
     """
 
     MODEL_NAME = "AutoSelectedLocalClassifier-synthetic-v2"
@@ -51,7 +51,34 @@ class LocalTransactionClassifier:
         self.requested_algorithm = normalize_algorithm(
             os.getenv("LOCAL_MODEL_ALGORITHM", "random_forest")
         )
+        self.review_enabled = os.getenv("HUMAN_REVIEW_ENABLED", "true").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        self.review_confidence_threshold = max(
+            0.0,
+            min(1.0, float(os.getenv("HUMAN_REVIEW_CONFIDENCE_THRESHOLD", "0.25"))),
+        )
+        self.review_fallbacks = os.getenv(
+            "HUMAN_REVIEW_FALLBACK_REQUIRED", "true"
+        ).lower() in {"1", "true", "yes"}
+        self._model_lock = threading.RLock()
+
         configured_path = os.getenv("LOCAL_MODEL_PATH", "").strip()
+        if not configured_path and os.getenv("AUTO_RETRAIN_ENABLED", "false").lower() in {
+            "1",
+            "true",
+            "yes",
+        }:
+            default_retrained_path = (
+                Path(__file__).resolve().parents[1]
+                / "models"
+                / "transaction_classifier.joblib"
+            )
+            configured_path = os.getenv(
+                "AUTO_RETRAIN_MODEL_PATH", str(default_retrained_path)
+            ).strip()
         self.artifact_path = Path(configured_path) if configured_path else None
 
         if self.available:
@@ -76,23 +103,35 @@ class LocalTransactionClassifier:
             raise ValueError("model artifact does not support probability inference")
 
         metrics = artifact.get("metrics") or {}
-        self.model = model
-        self.model_name = str(
-            artifact.get("model_name", "LocalClassifier-reviewed-v2")
-        )
-        self.dataset_source = str(
-            artifact.get(
-                "dataset_source", "human-reviewed simulator transactions"
+        with self._model_lock:
+            self.model = model
+            self.model_name = str(
+                artifact.get("model_name", "LocalClassifier-reviewed-v2")
             )
-        )
-        self.threshold = float(
-            artifact.get("threshold", metrics.get("threshold", self.DEFAULT_THRESHOLD))
-        )
-        self.selected_algorithm = str(
-            artifact.get("selected_algorithm", artifact.get("model_type", "unknown"))
-        )
-        self.candidate_metrics = dict(artifact.get("candidate_metrics") or {})
-        self.metrics = ModelMetrics.from_dict(metrics)
+            self.dataset_source = str(
+                artifact.get(
+                    "dataset_source", "human-reviewed simulator transactions"
+                )
+            )
+            self.threshold = float(
+                artifact.get(
+                    "threshold", metrics.get("threshold", self.DEFAULT_THRESHOLD)
+                )
+            )
+            self.selected_algorithm = str(
+                artifact.get(
+                    "selected_algorithm", artifact.get("model_type", "unknown")
+                )
+            )
+            self.candidate_metrics = dict(artifact.get("candidate_metrics") or {})
+            self.metrics = ModelMetrics.from_dict(metrics)
+            self.artifact_path = path
+            self.available = True
+            self.error = None
+
+    def load_artifact(self, path: Path) -> None:
+        """Hot-load a validated reviewed-data artifact."""
+        self._load_artifact(path)
 
     @staticmethod
     def _vectorize(
@@ -175,12 +214,31 @@ class LocalTransactionClassifier:
             seed=self.seed,
             dataset_label="synthetic",
         )
-        self.model = selection.model
-        self.selected_algorithm = selection.selected_algorithm
-        self.model_name = selection.model_name
-        self.threshold = selection.threshold
-        self.metrics = selection.metrics
-        self.candidate_metrics = selection.candidate_metrics
+        with self._model_lock:
+            self.model = selection.model
+            self.selected_algorithm = selection.selected_algorithm
+            self.model_name = selection.model_name
+            self.threshold = selection.threshold
+            self.metrics = selection.metrics
+            self.candidate_metrics = selection.candidate_metrics
+
+    def _review_policy(
+        self,
+        *,
+        confidence: float,
+        fallback_reason: str | None,
+    ) -> tuple[bool, list[str]]:
+        if not self.review_enabled:
+            return False, []
+
+        reasons: list[str] = []
+        if confidence < self.review_confidence_threshold:
+            reasons.append(
+                f"Model confidence {confidence:.2f} is below the {self.review_confidence_threshold:.2f} review threshold"
+            )
+        if fallback_reason and self.review_fallbacks:
+            reasons.append("The local ML engine used a fallback decision")
+        return bool(reasons), reasons
 
     def score_transaction(
         self,
@@ -192,7 +250,7 @@ class LocalTransactionClassifier:
         is_vpn: bool = False,
     ) -> dict[str, Any]:
         if not self.available or self.model is None:
-            return rule_engine.fallback_score_transaction(
+            fallback = rule_engine.fallback_score_transaction(
                 amount=amount,
                 tx_type=tx_type,
                 account_age_days=account_age_days,
@@ -200,6 +258,16 @@ class LocalTransactionClassifier:
                 is_vpn=is_vpn,
                 fallback_reason=self.error or "local ML dependencies are unavailable",
             )
+            predicted_label = "heavy" if fallback["is_heavy"] else "light"
+            fallback.update(
+                {
+                    "predicted_label": predicted_label,
+                    "model_probability": fallback["risk_score"] / 100.0,
+                    "review_required": self.review_enabled and self.review_fallbacks,
+                    "review_reasons": ["The local ML engine used a fallback decision"],
+                }
+            )
+            return fallback
 
         vector = vectorize_transaction(
             amount=amount,
@@ -208,11 +276,23 @@ class LocalTransactionClassifier:
             mcc=mcc,
             is_vpn=is_vpn,
         )
-        probability = float(self.model.predict_proba([vector])[0][1])
-        is_heavy = probability >= self.threshold
-        risk_score = int(round(probability * 100))
+        with self._model_lock:
+            model = self.model
+            threshold = self.threshold
+            model_name = self.model_name
+            probability = float(model.predict_proba([vector])[0][1])
 
-        if probability >= max(0.72, self.threshold + 0.12):
+        is_heavy = probability >= threshold
+        risk_score = int(round(probability * 100))
+        confidence = round(
+            min(
+                1.0,
+                abs(probability - threshold) / max(threshold, 1 - threshold),
+            ),
+            3,
+        )
+
+        if probability >= max(0.72, threshold + 0.12):
             risk_level = "high"
             task_path = "DEEP FRAUD CHECK"
         elif is_heavy:
@@ -222,6 +302,10 @@ class LocalTransactionClassifier:
             risk_level = "low"
             task_path = "LIGHT FAST-PATH"
 
+        review_required, review_reasons = self._review_policy(
+            confidence=confidence,
+            fallback_reason=None,
+        )
         return {
             "risk_score": risk_score,
             "risk_level": risk_level,
@@ -236,8 +320,12 @@ class LocalTransactionClassifier:
                 is_vpn=is_vpn,
             ),
             "classifier_source": "local_ml",
-            "model_name": self.model_name,
-            "confidence": round(abs(probability - self.threshold) / max(self.threshold, 1 - self.threshold), 3),
+            "model_name": model_name,
+            "confidence": confidence,
+            "model_probability": round(probability, 6),
+            "predicted_label": "heavy" if is_heavy else "light",
+            "review_required": review_required,
+            "review_reasons": review_reasons,
             "api_used": False,
             "fallback_reason": None,
         }
@@ -251,6 +339,11 @@ class LocalTransactionClassifier:
             "selected_algorithm": self.selected_algorithm,
             "threshold": round(self.threshold, 4),
             "xgboost_available": xgboost_available(),
+            "review_policy": {
+                "enabled": self.review_enabled,
+                "confidence_threshold": self.review_confidence_threshold,
+                "fallbacks_require_review": self.review_fallbacks,
+            },
             "metrics": self.metrics.as_dict() if self.metrics else None,
             "candidate_metrics": self.candidate_metrics,
             "artifact_path": str(self.artifact_path) if self.artifact_path else None,

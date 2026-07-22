@@ -1,0 +1,25 @@
+Extract this archive into the repository root and allow replacement.
+
+Changed/new files:
+.gitignore
+HUMAN_REVIEW_RETRAINING_GUIDE.md
+docker-compose.yml
+backend/.env.example
+backend/core/orchestrator.py
+backend/core/transaction_store.py
+backend/main.py
+backend/ml/features.py
+backend/ml/hybrid_ai_engine.py
+backend/ml/local_model.py
+backend/ml/model_training.py
+backend/ml/retraining_manager.py
+backend/models/schemas.py
+backend/requirements-xgboost.txt
+backend/scripts/train_from_collected_data.py
+backend/tests/test_ai_architecture.py
+frontend/src/app/page.tsx
+frontend/src/app/simulator/page.tsx
+frontend/src/components/ControlPanel.tsx
+frontend/src/components/ReviewQueueModal.tsx
+frontend/src/components/TransactionModal.tsx
+frontend/src/types/index.ts

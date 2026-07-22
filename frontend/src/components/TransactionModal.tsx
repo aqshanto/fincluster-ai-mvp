@@ -3,13 +3,14 @@
 import React, { useState } from "react";
 import axios from "axios";
 import {
-  X,
-  Terminal,
-  ShieldAlert,
   CheckCircle2,
+  ClipboardCheck,
   Cpu,
   Globe,
   Send,
+  ShieldAlert,
+  Terminal,
+  X,
 } from "lucide-react";
 import api from "@/services/api";
 import { ManualTransactionResult } from "@/types";
@@ -28,11 +29,11 @@ export default function TransactionModal({
   const [accountAge, setAccountAge] = useState("120");
   const [mcc, setMcc] = useState("5411");
   const [isVpn, setIsVpn] = useState(false);
+  const [forceHumanReview, setForceHumanReview] = useState(false);
   const [ipAddress, setIpAddress] = useState("103.108.140.15");
-  const [terminalId, setTerminalId] = useState(
-    "POS-DHAKA-GULSHAN-01",
-  );
+  const [terminalId, setTerminalId] = useState("POS-DHAKA-GULSHAN-01");
   const [loading, setLoading] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [lastResult, setLastResult] =
     useState<ManualTransactionResult | null>(null);
   const [error, setError] = useState("");
@@ -75,13 +76,10 @@ export default function TransactionModal({
     setLoading(true);
     setLastResult(null);
     setError("");
+    setFeedbackMessage("");
 
-    const stan = Math.floor(
-      100000 + Math.random() * 900000,
-    ).toString();
-    const rrn = `3019${Math.floor(
-      10000000 + Math.random() * 90000000,
-    )}`;
+    const stan = Math.floor(100000 + Math.random() * 900000).toString();
+    const rrn = `3019${Math.floor(10000000 + Math.random() * 90000000)}`;
 
     try {
       const response = await api.post<ManualTransactionResult>(
@@ -90,6 +88,7 @@ export default function TransactionModal({
           amount: Number(amount),
           tx_type: Number(txType),
           account_age_days: Number(accountAge),
+          force_human_review: forceHumanReview,
           metadata: {
             stan,
             rrn,
@@ -107,10 +106,7 @@ export default function TransactionModal({
 
       setLastResult(response.data);
     } catch (caught) {
-      if (
-        axios.isAxiosError(caught) &&
-        caught.response?.status === 401
-      ) {
+      if (axios.isAxiosError(caught) && caught.response?.status === 401) {
         onUnauthorized();
         return;
       }
@@ -124,46 +120,82 @@ export default function TransactionModal({
     }
   };
 
-  const submitFeedback = async (reviewedLabel: "heavy" | "light") => {
+  const submitHumanDecision = async (
+    reviewedLabel: "heavy" | "light",
+  ) => {
     if (!lastResult) return;
+    setReviewing(true);
+    setFeedbackMessage("");
     try {
-      await api.post("/api/v1/ai/feedback", {
-        event_uid: lastResult.event_uid,
-        reviewed_label: reviewedLabel,
-      });
-      setFeedbackMessage(`Saved human label: ${reviewedLabel}`);
-    } catch {
-      setFeedbackMessage("Could not save feedback.");
+      if (lastResult.status === "pending_review") {
+        const response = await api.post<ManualTransactionResult>(
+          "/api/v1/ai/reviews/resolve",
+          {
+            event_uid: lastResult.event_uid,
+            reviewed_label: reviewedLabel,
+          },
+        );
+        setLastResult(response.data);
+        setFeedbackMessage(
+          response.data.prediction_correct
+            ? `Human review confirmed ${reviewedLabel}; the task is now routed.`
+            : `Human review corrected the model to ${reviewedLabel}; the task is now routed.`,
+        );
+      } else {
+        const response = await api.post<{
+          prediction_correct: boolean;
+        }>("/api/v1/ai/feedback", {
+          event_uid: lastResult.event_uid,
+          reviewed_label: reviewedLabel,
+        });
+        setFeedbackMessage(
+          response.data.prediction_correct
+            ? `Saved label: ${reviewedLabel} (model confirmed).`
+            : `Saved correction: ${reviewedLabel} (model was wrong).`,
+        );
+      }
+    } catch (caught) {
+      if (axios.isAxiosError(caught) && caught.response?.status === 401) {
+        onUnauthorized();
+        return;
+      }
+      const message = axios.isAxiosError<{ detail?: string }>(caught)
+        ? caught.response?.data?.detail
+        : undefined;
+      setFeedbackMessage(message || "Could not save the human decision.");
+    } finally {
+      setReviewing(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex justify-center items-center z-50 pointer-events-auto animate-fade-in">
-      <div className="glass-panel p-6 rounded-2xl w-140 max-h-[92vh] overflow-y-auto border border-slate-700 shadow-2xl bg-slate-900/95 text-slate-100 relative">
-        <div className="flex justify-between items-center pb-3 mb-4 border-b border-slate-800">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md pointer-events-auto animate-fade-in">
+      <div className="glass-panel relative max-h-[92vh] w-140 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900/95 p-6 text-slate-100 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-blue-600/20 border border-blue-500 rounded-lg">
-              <Terminal className="w-5 h-5 text-blue-400" />
+            <div className="rounded-lg border border-blue-500 bg-blue-600/20 p-2">
+              <Terminal className="h-5 w-5 text-blue-400" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-white">
+              <h3 className="text-base font-bold text-white">
                 MFS Transaction Switch
               </h3>
-              <p className="text-[10px] text-slate-400 font-mono">
-                Explainable risk scoring + actual routing result
+              <p className="font-mono text-[10px] text-slate-400">
+                ML classification, optional human gate, and actual routing
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-800"
+            className="rounded-lg bg-slate-800 p-1 text-slate-400 hover:text-white"
           >
-            <X className="w-5 h-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="mb-4">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+          <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
             Quick demo scenarios
           </label>
           <div className="grid grid-cols-3 gap-2">
@@ -171,28 +203,25 @@ export default function TransactionModal({
               onClick={() => applyPreset("normal")}
               label="Normal Pay"
               detail="BDT 450"
-              icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+              icon={<CheckCircle2 className="h-3.5 w-3.5" />}
             />
             <PresetButton
               onClick={() => applyPreset("cashout")}
               label="Agent Cash"
               detail="BDT 18.5k"
-              icon={<Cpu className="w-3.5 h-3.5" />}
+              icon={<Cpu className="h-3.5 w-3.5" />}
             />
             <PresetButton
               onClick={() => applyPreset("fraud")}
               label="Tor Wire"
               detail="BDT 48k"
-              icon={<ShieldAlert className="w-3.5 h-3.5" />}
+              icon={<ShieldAlert className="h-3.5 w-3.5" />}
               danger
             />
           </div>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-3 font-mono text-xs"
-        >
+        <form onSubmit={handleSubmit} className="space-y-3 font-mono text-xs">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Amount (BDT)">
               <input
@@ -227,9 +256,7 @@ export default function TransactionModal({
                 <option value="5411">5411 - Grocery</option>
                 <option value="6011">6011 - ATM / Cash</option>
                 <option value="4814">4814 - Mobile Top-up</option>
-                <option value="7995">
-                  7995 - High-risk / Gambling
-                </option>
+                <option value="7995">7995 - High-risk / Gambling</option>
               </select>
             </Field>
             <Field label="Account Age (Days)">
@@ -247,9 +274,7 @@ export default function TransactionModal({
             <Field label="Terminal ID">
               <input
                 value={terminalId}
-                onChange={(event) =>
-                  setTerminalId(event.target.value)
-                }
+                onChange={(event) => setTerminalId(event.target.value)}
                 className="input-style"
               />
             </Field>
@@ -262,21 +287,32 @@ export default function TransactionModal({
             </Field>
           </div>
 
-          <label className="flex items-center gap-2 bg-slate-950 p-2 rounded border border-slate-800 w-fit">
-            <input
-              type="checkbox"
-              checked={isVpn}
-              onChange={(event) => setIsVpn(event.target.checked)}
-              className="w-4 h-4 accent-rose-500"
-            />
-            <Globe className="w-3.5 h-3.5 text-rose-400" />
-            <span className="text-rose-400 font-bold">
-              VPN / Tor origin
-            </span>
-          </label>
+          <div className="flex flex-wrap gap-2">
+            <label className="flex w-fit items-center gap-2 rounded border border-slate-800 bg-slate-950 p-2">
+              <input
+                type="checkbox"
+                checked={isVpn}
+                onChange={(event) => setIsVpn(event.target.checked)}
+                className="h-4 w-4 accent-rose-500"
+              />
+              <Globe className="h-3.5 w-3.5 text-rose-400" />
+              <span className="font-bold text-rose-400">VPN / Tor origin</span>
+            </label>
+
+            <label className="flex w-fit items-center gap-2 rounded border border-amber-800 bg-amber-950/40 p-2">
+              <input
+                type="checkbox"
+                checked={forceHumanReview}
+                onChange={(event) => setForceHumanReview(event.target.checked)}
+                className="h-4 w-4 accent-amber-500"
+              />
+              <ClipboardCheck className="h-3.5 w-3.5 text-amber-400" />
+              <span className="font-bold text-amber-300">Force human review</span>
+            </label>
+          </div>
 
           {error && (
-            <p className="p-2 bg-red-950/60 border border-red-800 rounded text-red-300">
+            <p className="rounded border border-red-800 bg-red-950/60 p-2 text-red-300">
               {error}
             </p>
           )}
@@ -284,34 +320,47 @@ export default function TransactionModal({
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-sans font-bold py-2.5 rounded-lg flex items-center justify-center gap-2"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 font-sans font-bold text-white hover:bg-blue-500 disabled:opacity-50"
           >
-            <Send className="w-4 h-4" />
-            {loading ? "Scoring and routing..." : "Inject Transaction"}
+            <Send className="h-4 w-4" />
+            {loading ? "Scoring transaction..." : "Inject Transaction"}
           </button>
         </form>
 
         {lastResult && (
-          <div className="mt-4 bg-slate-950/80 border border-slate-700 rounded-xl p-4 text-xs">
-            <div className="flex justify-between items-start gap-3">
-              <div>
-                <p className="font-bold text-white">
-                  {lastResult.task_path}
+          <div className="mt-4 rounded-xl border border-slate-700 bg-slate-950/80 p-4 text-xs">
+            {lastResult.status === "pending_review" && (
+              <div className="mb-3 rounded-lg border border-amber-700 bg-amber-950/50 p-3 text-amber-100">
+                <p className="flex items-center gap-2 font-bold text-amber-300">
+                  <ClipboardCheck className="h-4 w-4" />
+                  Held for human review — no node has processed this task
                 </p>
-                <p className="text-slate-400 mt-0.5">
+                <ul className="mt-2 space-y-1 text-[11px]">
+                  {lastResult.review_reasons.map((reason) => (
+                    <li key={reason}>• {reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-bold text-white">{lastResult.task_path}</p>
+                <p className="mt-0.5 text-slate-400">
                   Engine: <span className="text-cyan-300">{lastResult.model_name}</span>
                   {lastResult.fallback_reason ? " (local fallback)" : ""}
                 </p>
-                <p className="text-slate-400 mt-0.5">
-                  Risk score:{" "}
-                  <span className="text-amber-400 font-bold">
-                    {lastResult.risk_score}
-                  </span>{" "}
+                <p className="mt-0.5 text-slate-400">
+                  Prediction: <span className="font-bold uppercase text-blue-300">{lastResult.predicted_label}</span>
+                  {" · "}confidence {(lastResult.confidence * 100).toFixed(1)}%
+                </p>
+                <p className="mt-0.5 text-slate-400">
+                  Risk score: <span className="font-bold text-amber-400">{lastResult.risk_score}</span>{" "}
                   ({lastResult.risk_level})
                 </p>
               </div>
-              <span className="text-[10px] font-mono text-slate-500">
-                RRN {lastResult.rrn}
+              <span className="font-mono text-[10px] text-slate-500">
+                {lastResult.rrn ? `RRN ${lastResult.rrn}` : lastResult.event_uid}
               </span>
             </div>
 
@@ -319,57 +368,55 @@ export default function TransactionModal({
               {lastResult.risk_factors.length > 0 ? (
                 lastResult.risk_factors.map((factor) => (
                   <div
-                    key={factor.code}
+                    key={`${factor.code}-${factor.detail}`}
                     className="flex justify-between gap-3 border-b border-slate-800 pb-1"
                   >
-                    <span className="text-slate-300">
-                      {factor.label}
-                    </span>
-                    <span className="text-rose-400 font-bold">
-                      +{factor.points}
-                    </span>
+                    <span className="text-slate-300">{factor.label}</span>
+                    <span className="font-bold text-rose-400">+{factor.points}</span>
                   </div>
                 ))
               ) : (
-                <p className="text-emerald-400">
-                  No elevated-risk factors
-                </p>
+                <p className="text-emerald-400">No elevated-risk factors</p>
               )}
             </div>
 
             {lastResult.fallback_reason && (
-              <p className="mt-3 p-2 rounded bg-amber-950/50 border border-amber-800 text-amber-200">
+              <p className="mt-3 rounded border border-amber-800 bg-amber-950/50 p-2 text-amber-200">
                 External API fallback: {lastResult.fallback_reason}
               </p>
             )}
 
-            <div className="mt-3 p-2 rounded bg-blue-950/50 border border-blue-800 text-blue-200">
-              <p className="font-bold">
-                Actual {lastResult.strategy.toUpperCase()} route:{" "}
-                {lastResult.route.node_name || "FAILED"}
-              </p>
-              <p className="mt-1 text-[11px]">
-                {lastResult.route.reason}
-              </p>
-              <p className="mt-1 text-[11px]">
-                Estimated latency:{" "}
-                {lastResult.route.estimated_latency_ms} ms
-              </p>
-            </div>
+            {lastResult.route && (
+              <div className="mt-3 rounded border border-blue-800 bg-blue-950/50 p-2 text-blue-200">
+                <p className="font-bold">
+                  Actual {lastResult.strategy.toUpperCase()} route: {lastResult.route.node_name || "FAILED"}
+                </p>
+                <p className="mt-1 text-[11px]">{lastResult.route.reason}</p>
+                <p className="mt-1 text-[11px]">
+                  Estimated latency: {lastResult.route.estimated_latency_ms} ms
+                </p>
+              </div>
+            )}
 
-            <div className="mt-3 flex items-center gap-2">
-              <span className="text-slate-500">Human label:</span>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-slate-500">
+                {lastResult.status === "pending_review"
+                  ? "Human routing decision:"
+                  : "Human training label:"}
+              </span>
               <button
                 type="button"
-                onClick={() => submitFeedback("heavy")}
-                className="px-2 py-1 rounded bg-rose-950 border border-rose-800 text-rose-300"
+                disabled={reviewing}
+                onClick={() => void submitHumanDecision("heavy")}
+                className="rounded border border-rose-800 bg-rose-950 px-2 py-1 text-rose-300 disabled:opacity-50"
               >
                 Heavy
               </button>
               <button
                 type="button"
-                onClick={() => submitFeedback("light")}
-                className="px-2 py-1 rounded bg-emerald-950 border border-emerald-800 text-emerald-300"
+                disabled={reviewing}
+                onClick={() => void submitHumanDecision("light")}
+                className="rounded border border-emerald-800 bg-emerald-950 px-2 py-1 text-emerald-300 disabled:opacity-50"
               >
                 Light
               </button>
@@ -393,7 +440,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-slate-400 block mb-1">{label}</span>
+      <span className="mb-1 block text-slate-400">{label}</span>
       {children}
     </label>
   );
@@ -416,10 +463,10 @@ function PresetButton({
     <button
       type="button"
       onClick={onClick}
-      className={`py-2 px-2 border rounded text-xs font-medium flex flex-col items-center gap-1 transition-all ${
+      className={`flex flex-col items-center gap-1 rounded border px-2 py-2 text-xs font-medium transition-all ${
         danger
-          ? "bg-rose-950/60 hover:bg-rose-900/80 border-rose-700 text-rose-400"
-          : "bg-slate-800 hover:bg-slate-700 border-slate-600 text-blue-300"
+          ? "border-rose-700 bg-rose-950/60 text-rose-400 hover:bg-rose-900/80"
+          : "border-slate-600 bg-slate-800 text-blue-300 hover:bg-slate-700"
       }`}
     >
       <span className="flex items-center gap-1">

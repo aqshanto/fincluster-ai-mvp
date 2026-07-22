@@ -4,8 +4,26 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
+from dotenv import load_dotenv
+
+# Load backend/.env before importing application modules.
+# Several modules create global objects during import and read environment
+# variables immediately, so this must remain above those imports.
+load_dotenv(
+    dotenv_path=Path(__file__).resolve().with_name(".env"),
+    override=False,
+)
+
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
@@ -13,8 +31,10 @@ from core.orchestrator import orchestrator
 from core.security import authenticate_operator, create_access_token, verify_token
 from core.transaction_store import transaction_store
 from ml.hybrid_ai_engine import hybrid_ai
+from ml.retraining_manager import retraining_manager
 from models.schemas import (
     ClassificationFeedbackRequest,
+    HumanReviewDecisionRequest,
     LoginRequest,
     ManualTxRequest,
     TokenResponse,
@@ -63,7 +83,6 @@ class TelemetryConnectionManager:
                 timeout=0.75,
             )
             return True
-
         except Exception:
             return False
 
@@ -74,7 +93,7 @@ class TelemetryConnectionManager:
             return
 
         results = await asyncio.gather(
-            *(self._send(ws, payload) for ws in connections),
+            *(self._send(websocket, payload) for websocket in connections),
             return_exceptions=False,
         )
 
@@ -88,14 +107,11 @@ class TelemetryConnectionManager:
 
 
 manager = TelemetryConnectionManager()
-
 simulation_lock = asyncio.Lock()
 
 
 async def simulation_loop() -> None:
-    """
-    The only code path that advances global simulation time.
-    """
+    """The only code path that advances global simulation time."""
 
     while True:
         try:
@@ -181,7 +197,6 @@ async def root_status():
     response_model=TokenResponse,
 )
 async def login(request: LoginRequest):
-
     if not authenticate_operator(
         request.username,
         request.password,
@@ -192,9 +207,7 @@ async def login(request: LoginRequest):
         )
 
     return TokenResponse(
-        access_token=create_access_token(
-            request.username
-        )
+        access_token=create_access_token(request.username)
     )
 
 
@@ -213,6 +226,7 @@ async def ai_status():
     return {
         "ai_runtime": hybrid_ai.status(),
         "dataset": transaction_store.stats(),
+        "retraining": retraining_manager.status(),
     }
 
 
@@ -221,9 +235,7 @@ async def toggle_ai(
     _: dict = Depends(verify_token),
 ):
     async with simulation_lock:
-        orchestrator.ai_enabled = (
-            not orchestrator.ai_enabled
-        )
+        orchestrator.ai_enabled = not orchestrator.ai_enabled
 
         return {
             "status": "success",
@@ -265,9 +277,7 @@ async def toggle_surge(
     _: dict = Depends(verify_token),
 ):
     async with simulation_lock:
-        orchestrator.surge_active = (
-            not orchestrator.surge_active
-        )
+        orchestrator.surge_active = not orchestrator.surge_active
 
         return {
             "status": "success",
@@ -280,9 +290,7 @@ async def trigger_anomaly(
     _: dict = Depends(verify_token),
 ):
     async with simulation_lock:
-        orchestrator.anomaly_active = (
-            not orchestrator.anomaly_active
-        )
+        orchestrator.anomaly_active = not orchestrator.anomaly_active
 
         return {
             "status": "success",
@@ -294,7 +302,6 @@ async def trigger_anomaly(
 async def reset_simulation(
     _: dict = Depends(verify_token),
 ):
-
     async with simulation_lock:
         orchestrator.reset_simulation()
         snapshot = orchestrator.get_telemetry()
@@ -313,12 +320,11 @@ async def inject_transaction(
     request: ManualTxRequest,
     _: dict = Depends(verify_token),
 ):
+    metadata = request.metadata.model_dump(mode="json")
 
-    metadata = request.metadata.model_dump(
-        mode="json"
-    )
-
-    # External AI inference never blocks simulation.
+    # External inference must never hold the global simulation lock.
+    # A slow or rate-limited provider therefore cannot freeze telemetry
+    # or automatic simulator traffic.
     analysis = await hybrid_ai.score_manual(
         amount=request.amount,
         tx_type=request.tx_type,
@@ -327,19 +333,107 @@ async def inject_transaction(
         is_vpn=metadata["is_vpn"],
     )
 
-    async with simulation_lock:
+    if request.force_human_review:
+        analysis["review_required"] = True
 
-        result = orchestrator.inject_manual_transaction(
-            amount=request.amount,
-            tx_type=request.tx_type,
-            account_age_days=request.account_age_days,
-            metadata=metadata,
-            analysis=analysis,
+        reasons = list(
+            analysis.get("review_reasons") or []
+        )
+        reasons.append(
+            "Operator explicitly requested human review"
         )
 
-        snapshot = orchestrator.get_telemetry()
+        analysis["review_reasons"] = reasons
+
+    try:
+        async with simulation_lock:
+            if analysis.get("review_required", False):
+                result = orchestrator.hold_manual_transaction(
+                    amount=request.amount,
+                    tx_type=request.tx_type,
+                    account_age_days=request.account_age_days,
+                    metadata=metadata,
+                    analysis=analysis,
+                )
+            else:
+                result = orchestrator.inject_manual_transaction(
+                    amount=request.amount,
+                    tx_type=request.tx_type,
+                    account_age_days=request.account_age_days,
+                    metadata=metadata,
+                    analysis=analysis,
+                )
+
+            snapshot = orchestrator.get_telemetry()
+
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
 
     await manager.broadcast(snapshot)
+
+    return result
+
+
+@app.get("/api/v1/ai/reviews")
+async def pending_reviews(
+    limit: int = 50,
+    _: dict = Depends(verify_token),
+):
+    safe_limit = max(1, min(limit, 200))
+
+    return {
+        "status": "success",
+        "items": transaction_store.list_pending_reviews(
+            limit=safe_limit
+        ),
+        "dataset": transaction_store.stats(),
+        "retraining": retraining_manager.status(),
+    }
+
+
+@app.post("/api/v1/ai/reviews/resolve")
+async def resolve_human_review(
+    request: HumanReviewDecisionRequest,
+    operator: dict = Depends(verify_token),
+):
+    pending = transaction_store.get_pending_review(
+        request.event_uid
+    )
+
+    if pending is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pending transaction review was not found",
+        )
+
+    try:
+        async with simulation_lock:
+            result = orchestrator.resolve_manual_review(
+                pending,
+                reviewed_label=request.reviewed_label,
+                reviewed_by=str(operator["sub"]),
+            )
+
+            snapshot = orchestrator.get_telemetry()
+
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    await manager.broadcast(snapshot)
+
+    asyncio.create_task(
+        retraining_manager.maybe_retrain(),
+        name="fincluster-reviewed-data-retraining",
+    )
+
+    result["dataset"] = transaction_store.stats()
+    result["retraining"] = retraining_manager.status()
 
     return result
 
@@ -347,27 +441,34 @@ async def inject_transaction(
 @app.post("/api/v1/ai/feedback")
 async def classification_feedback(
     request: ClassificationFeedbackRequest,
-    _: dict = Depends(verify_token),
+    operator: dict = Depends(verify_token),
 ):
-
     saved = transaction_store.add_feedback(
         request.event_uid,
         request.reviewed_label,
+        reviewed_by=str(operator["sub"]),
     )
 
-    if not saved:
+    if saved is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=(
-                "Manual transaction was not found "
-                "in the current dataset"
+                "Manual transaction was not found, "
+                "or it is still waiting in the review queue"
             ),
         )
+
+    asyncio.create_task(
+        retraining_manager.maybe_retrain(),
+        name="fincluster-feedback-retraining",
+    )
 
     return {
         "status": "success",
         "event_uid": request.event_uid,
-        "reviewed_label": request.reviewed_label,
+        **saved,
+        "dataset": transaction_store.stats(),
+        "retraining": retraining_manager.status(),
     }
 
 
@@ -375,7 +476,6 @@ async def classification_feedback(
 async def export_dataset(
     _: dict = Depends(verify_token),
 ):
-
     try:
         csv_text = transaction_store.export_csv()
 
@@ -389,8 +489,9 @@ async def export_dataset(
         content=csv_text,
         media_type="text/csv",
         headers={
-            "Content-Disposition":
-            'attachment; filename="fincluster-training-data.csv"'
+            "Content-Disposition": (
+                'attachment; filename="fincluster-training-data.csv"'
+            )
         },
     )
 
@@ -399,7 +500,6 @@ async def export_dataset(
 async def websocket_telemetry(
     websocket: WebSocket,
 ):
-
     origin = websocket.headers.get("origin")
 
     if origin and origin.rstrip("/") not in CORS_ORIGINS:
@@ -409,22 +509,21 @@ async def websocket_telemetry(
         )
         return
 
-
     await manager.accept(websocket)
 
-    async with simulation_lock:
-        snapshot = orchestrator.get_telemetry()
-
-    await websocket.send_json(snapshot)
-
-    manager.add(websocket)
-
     try:
+        async with simulation_lock:
+            snapshot = orchestrator.get_telemetry()
+
+        await websocket.send_json(snapshot)
+        manager.add(websocket)
+
         while True:
             await websocket.receive_text()
 
-    except (
-        WebSocketDisconnect,
-        RuntimeError,
-    ):
+    except (WebSocketDisconnect, RuntimeError):
         manager.disconnect(websocket)
+
+    except Exception:
+        manager.disconnect(websocket)
+        logger.exception("Unexpected WebSocket telemetry error")

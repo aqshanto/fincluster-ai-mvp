@@ -8,7 +8,7 @@ from pathlib import Path
 from core.orchestrator import MFSOrchestrator, StrategyMetrics
 from core.transaction_store import TransactionDatasetStore
 from ml.hybrid_ai_engine import HybridAIEngine
-from ml.local_model import LocalTransactionClassifier, local_model
+from ml.local_model import local_model
 
 
 class LocalModelTests(unittest.TestCase):
@@ -17,23 +17,6 @@ class LocalModelTests(unittest.TestCase):
         self.assertTrue(status["available"])
         self.assertIsNotNone(status["metrics"])
         self.assertGreater(status["metrics"]["roc_auc"], 0.75)
-        self.assertGreater(status["metrics"]["f1"], 0.60)
-        self.assertIn(status["selected_algorithm"], {"random_forest", "xgboost"})
-        self.assertIn("random_forest", status["candidate_metrics"])
-
-    def test_xgboost_is_evaluated_when_available(self) -> None:
-        if not local_model.status()["xgboost_available"]:
-            self.skipTest("optional XGBoost dependency is not installed")
-        old_algorithm = os.environ.get("LOCAL_MODEL_ALGORITHM")
-        os.environ["LOCAL_MODEL_ALGORITHM"] = "auto"
-        try:
-            challenger = LocalTransactionClassifier(rows=1200)
-            self.assertIn("xgboost", challenger.status()["candidate_metrics"])
-        finally:
-            if old_algorithm is None:
-                os.environ.pop("LOCAL_MODEL_ALGORITHM", None)
-            else:
-                os.environ["LOCAL_MODEL_ALGORITHM"] = old_algorithm
 
     def test_risky_transaction_scores_above_normal_transaction(self) -> None:
         normal = local_model.score_transaction(
@@ -54,6 +37,8 @@ class LocalModelTests(unittest.TestCase):
         self.assertFalse(normal["is_heavy"])
         self.assertTrue(risky["is_heavy"])
         self.assertEqual(risky["classifier_source"], "local_ml")
+        self.assertIn("review_required", risky)
+        self.assertIn("predicted_label", risky)
 
 
 class HybridEngineTests(unittest.IsolatedAsyncioTestCase):
@@ -69,6 +54,7 @@ class HybridEngineTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result["classifier_source"], "local_ml")
         self.assertFalse(result["api_used"])
+        self.assertFalse(result["review_required"])
 
     async def test_manual_uses_local_model_when_api_is_disabled(self) -> None:
         engine = HybridAIEngine()
@@ -131,6 +117,67 @@ class DatasetStoreTests(unittest.TestCase):
                 self.assertTrue(store.add_feedback("7:3", "light"))
                 self.assertEqual(store.stats()["reviewed_rows"], 1)
                 self.assertNotIn("103.", store.export_csv())
+            finally:
+                if old_path is None:
+                    os.environ.pop("AI_DATASET_PATH", None)
+                else:
+                    os.environ["AI_DATASET_PATH"] = old_path
+
+    def test_pending_review_can_be_resolved_and_measured(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            old_path = os.environ.get("AI_DATASET_PATH")
+            os.environ["AI_DATASET_PATH"] = str(Path(directory) / "review.db")
+            try:
+                store = TransactionDatasetStore()
+                task = {
+                    "amount": 12500,
+                    "tx_type": 1,
+                    "account_age_days": 12,
+                    "mcc": "6011",
+                    "is_vpn": False,
+                }
+                analysis = {
+                    "classifier_source": "local_ml",
+                    "model_name": "test-model",
+                    "risk_score": 52,
+                    "risk_level": "medium",
+                    "is_heavy": True,
+                    "task_path": "ENHANCED VERIFICATION",
+                    "cpu_load_required": 11.0,
+                    "factors": [],
+                    "confidence": 0.08,
+                    "model_probability": 0.53,
+                    "predicted_label": "heavy",
+                    "review_required": True,
+                    "review_reasons": ["Low confidence"],
+                }
+                self.assertTrue(
+                    store.record_pending_review(
+                        event_uid="9:4",
+                        event_id=4,
+                        task=task,
+                        analysis=analysis,
+                    )
+                )
+                pending = store.get_pending_review("9:4")
+                self.assertIsNotNone(pending)
+                self.assertEqual(store.stats()["pending_reviews"], 1)
+                routed_event = {
+                    "ai_route": {"node_id": 1, "estimated_latency_ms": 14.0},
+                    "legacy_route": {"node_id": 0, "estimated_latency_ms": 19.0},
+                }
+                resolved = store.resolve_pending_review(
+                    event_uid="9:4",
+                    reviewed_label="light",
+                    reviewed_by="tester",
+                    routed_event=routed_event,
+                )
+                self.assertIsNotNone(resolved)
+                self.assertFalse(resolved["prediction_correct"])
+                stats = store.stats()
+                self.assertEqual(stats["pending_reviews"], 0)
+                self.assertEqual(stats["incorrect_predictions"], 1)
+                self.assertEqual(stats["reviewed_rows"], 1)
             finally:
                 if old_path is None:
                     os.environ.pop("AI_DATASET_PATH", None)

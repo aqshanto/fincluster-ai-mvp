@@ -249,6 +249,7 @@ export default function Home() {
         }
         externalModel={telemetry?.ai_runtime.external_model ?? "Gemini"}
         datasetRows={telemetry?.dataset.rows ?? 0}
+        pendingReviewCount={telemetry?.dataset.pending_reviews ?? 0}
       />
     </div>
   );
