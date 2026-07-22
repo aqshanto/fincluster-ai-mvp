@@ -1,5 +1,13 @@
-import { ArrowDown, Database, FileCheck2, FlaskConical, RefreshCw, ShieldCheck } from "lucide-react";
+import {
+  ArrowDown,
+  Database,
+  FileCheck2,
+  FlaskConical,
+  RefreshCw,
+  ShieldCheck,
+} from "lucide-react";
 
+import LandingVisual from "@/components/landing/ui/LandingVisual";
 import SectionHeading from "@/components/landing/ui/SectionHeading";
 
 const phases = [
@@ -32,7 +40,7 @@ const phases = [
 
 export default function RetrainingSection() {
   return (
-    <section className="border-b border-slate-800/70 py-24">
+    <section id="retraining" className="border-b border-slate-800/70 py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
           eyebrow="Controlled retraining"
@@ -54,11 +62,16 @@ export default function RetrainingSection() {
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-500/25 bg-violet-500/5 text-violet-300">
                   <Icon className="h-5 w-5" />
                 </div>
+
                 <div>
                   <p className="font-bold text-white">{title}</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-400">{note}</p>
+
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    {note}
+                  </p>
                 </div>
               </article>
+
               {index < phases.length - 1 && (
                 <ArrowDown className="mx-auto my-2 h-5 w-5 text-slate-600" />
               )}
@@ -66,21 +79,42 @@ export default function RetrainingSection() {
           ))}
         </div>
 
-        <div className="mx-auto mt-10 grid max-w-4xl gap-4 md:grid-cols-3">
+        <LandingVisual
+          src="/landing/controlled-retraining.png"
+          alt="Controlled FinCluster retraining pipeline using human-reviewed labels, Random Forest, XGBoost, validation metrics, quality gates, promotion, and hot loading"
+          label="Controlled Model Improvement"
+          tone="violet"
+          caption="The model never retrains from its own guesses. Human-reviewed labels train candidate models, and only a candidate that passes the quality gates is promoted."
+          className="mt-16"
+        />
+
+        <div className="mx-auto mt-12 grid max-w-4xl gap-4 md:grid-cols-3">
           <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5 text-center">
             <p className="font-mono text-3xl font-black text-blue-300">100</p>
+
             <p className="mt-2 text-sm font-bold text-white">First threshold</p>
+
             <p className="mt-1 text-xs text-slate-500">Reviewed transactions</p>
           </div>
+
           <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5 text-center">
             <p className="font-mono text-3xl font-black text-emerald-300">25</p>
+
             <p className="mt-2 text-sm font-bold text-white">Next batch</p>
+
             <p className="mt-1 text-xs text-slate-500">New reviewed labels</p>
           </div>
+
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 text-center">
             <p className="font-mono text-3xl font-black text-amber-300">OFF</p>
-            <p className="mt-2 text-sm font-bold text-white">Development mode</p>
-            <p className="mt-1 text-xs text-slate-500">Auto promotion stays disabled</p>
+
+            <p className="mt-2 text-sm font-bold text-white">
+              Development mode
+            </p>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Auto promotion stays disabled
+            </p>
           </div>
         </div>
 
@@ -88,6 +122,7 @@ export default function RetrainingSection() {
           <p className="text-sm font-black text-amber-200">
             Hackathon demonstration policy
           </p>
+
           <p className="mt-2 text-sm leading-6 text-slate-400">
             A separate controlled reviewed dataset validates retraining,
             promotion, and hot-loading without contaminating the live review

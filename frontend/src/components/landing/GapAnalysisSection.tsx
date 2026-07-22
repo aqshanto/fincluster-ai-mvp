@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 import FeatureCard from "@/components/landing/ui/FeatureCard";
+import LandingVisual from "@/components/landing/ui/LandingVisual";
 import SectionHeading from "@/components/landing/ui/SectionHeading";
 
 const gaps = [
@@ -76,6 +77,15 @@ export default function GapAnalysisSection() {
             <FeatureCard key={gap.title} {...gap} />
           ))}
         </div>
+
+        <LandingVisual
+          src="/landing/legacy-vs-ai-routing.png"
+          alt="Side-by-side comparison of legacy round-robin routing and FinCluster AI workload-aware routing"
+          label="Legacy Routing vs FinCluster AI"
+          tone="blue"
+          caption="Both strategies receive the same workload. Legacy routing rotates blindly, while FinCluster evaluates workload complexity, node capability, health, and fallback availability."
+          className="mt-16"
+        />
       </div>
     </section>
   );
