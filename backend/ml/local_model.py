@@ -4,68 +4,56 @@ import math
 import os
 import random
 from pathlib import Path
-from dataclasses import dataclass
 from typing import Any
 
+from ml.features import FEATURE_VERSION, MCCS, vectorize_transaction
+from ml.model_training import (
+    ModelMetrics,
+    ml_dependencies_available,
+    normalize_algorithm,
+    train_and_select_model,
+    xgboost_available,
+)
 from ml.rule_engine import rule_engine
 
 try:
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
-    from sklearn.model_selection import train_test_split
     import joblib
-except ImportError:  # pragma: no cover - exercised only in a broken deployment
-    RandomForestClassifier = None  # type: ignore[assignment]
-
-
-MCCS = ("5411", "6011", "4814", "7995")
-
-
-@dataclass(frozen=True)
-class ModelMetrics:
-    accuracy: float
-    precision: float
-    recall: float
-    roc_auc: float
-    training_rows: int
-    validation_rows: int
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "accuracy": round(self.accuracy, 4),
-            "precision": round(self.precision, 4),
-            "recall": round(self.recall, 4),
-            "roc_auc": round(self.roc_auc, 4),
-            "training_rows": self.training_rows,
-            "validation_rows": self.validation_rows,
-        }
+except ImportError:  # pragma: no cover - deployment fallback is tested elsewhere
+    joblib = None  # type: ignore[assignment]
 
 
 class LocalTransactionClassifier:
-    """A genuine local ML classifier trained once on seeded synthetic data.
+    """Local heavy/light classifier with Random Forest and XGBoost candidates.
 
-    The labels are generated from a non-linear latent risk process with noise and
-    interaction effects. This is appropriate for a simulator when private MFS
-    data is unavailable, but the status endpoint clearly identifies the dataset
-    as synthetic so it is not presented as production fraud intelligence.
+    When no reviewed artifact is configured, the classifier generates a seeded
+    synthetic MFS workload, trains the requested local candidate(s), tunes each
+    probability threshold on a validation split, and selects the stronger model.
+    The winner is then evaluated once on a held-out test split.
     """
 
-    MODEL_NAME = "RandomForestClassifier-synthetic-v1"
+    MODEL_NAME = "AutoSelectedLocalClassifier-synthetic-v2"
     DATASET_SOURCE = "seeded synthetic MFS workload data"
-    FEATURE_VERSION = 1
-    HEAVY_THRESHOLD = 0.52
+    FEATURE_VERSION = FEATURE_VERSION
+    DEFAULT_THRESHOLD = 0.52
 
     def __init__(self, rows: int = 6000, seed: int = 2026) -> None:
         self.rows = rows
         self.seed = seed
-        self.available = RandomForestClassifier is not None
+        self.available = ml_dependencies_available() and joblib is not None
         self.model: Any | None = None
         self.metrics: ModelMetrics | None = None
+        self.candidate_metrics: dict[str, dict[str, Any]] = {}
         self.error: str | None = None
         self.model_name = self.MODEL_NAME
         self.dataset_source = self.DATASET_SOURCE
+        self.threshold = self.DEFAULT_THRESHOLD
+        self.selected_algorithm: str | None = None
+        self.requested_algorithm = normalize_algorithm(
+            os.getenv("LOCAL_MODEL_ALGORITHM", "random_forest")
+        )
         configured_path = os.getenv("LOCAL_MODEL_PATH", "").strip()
         self.artifact_path = Path(configured_path) if configured_path else None
+
         if self.available:
             try:
                 if self.artifact_path and self.artifact_path.exists():
@@ -74,52 +62,60 @@ class LocalTransactionClassifier:
                     self._train()
             except Exception as exc:  # keep the simulator alive with rule fallback
                 self.available = False
-                self.error = f"Local model initialization failed: {type(exc).__name__}: {exc}"
-
+                self.error = (
+                    f"Local model initialization failed: {type(exc).__name__}: {exc}"
+                )
 
     def _load_artifact(self, path: Path) -> None:
+        assert joblib is not None
         artifact = joblib.load(path)
         if artifact.get("feature_version") != self.FEATURE_VERSION:
             raise ValueError("model artifact feature version is incompatible")
         model = artifact.get("model")
         if not hasattr(model, "predict_proba"):
             raise ValueError("model artifact does not support probability inference")
+
         metrics = artifact.get("metrics") or {}
         self.model = model
-        self.model_name = str(artifact.get("model_name", "RandomForestClassifier-reviewed-v1"))
-        self.dataset_source = str(artifact.get("dataset_source", "human-reviewed simulator transactions"))
-        self.metrics = ModelMetrics(
-            accuracy=float(metrics.get("accuracy", 0.0)),
-            precision=float(metrics.get("precision", 0.0)),
-            recall=float(metrics.get("recall", 0.0)),
-            roc_auc=float(metrics.get("roc_auc", 0.0)),
-            training_rows=int(metrics.get("training_rows", 0)),
-            validation_rows=int(metrics.get("validation_rows", 0)),
+        self.model_name = str(
+            artifact.get("model_name", "LocalClassifier-reviewed-v2")
         )
+        self.dataset_source = str(
+            artifact.get(
+                "dataset_source", "human-reviewed simulator transactions"
+            )
+        )
+        self.threshold = float(
+            artifact.get("threshold", metrics.get("threshold", self.DEFAULT_THRESHOLD))
+        )
+        self.selected_algorithm = str(
+            artifact.get("selected_algorithm", artifact.get("model_type", "unknown"))
+        )
+        self.candidate_metrics = dict(artifact.get("candidate_metrics") or {})
+        self.metrics = ModelMetrics.from_dict(metrics)
 
     @staticmethod
     def _vectorize(
         *, amount: float, tx_type: int, account_age_days: int, mcc: str, is_vpn: bool
     ) -> list[float]:
-        safe_amount = max(1.0, amount)
-        return [
-            math.log1p(safe_amount),
-            min(account_age_days, 3650) / 3650.0,
-            float(is_vpn),
-            float(tx_type == 0),
-            float(tx_type == 1),
-            float(tx_type == 2),
-            float(mcc == "5411"),
-            float(mcc == "6011"),
-            float(mcc == "4814"),
-            float(mcc == "7995"),
-            float(amount >= 20_000 and is_vpn),
-            float(account_age_days < 30 and tx_type == 1),
-        ]
+        """Backward-compatible wrapper used by older scripts and tests."""
+        return vectorize_transaction(
+            amount=amount,
+            tx_type=tx_type,
+            account_age_days=account_age_days,
+            mcc=mcc,
+            is_vpn=is_vpn,
+        )
 
     @staticmethod
     def _latent_probability(
-        *, amount: float, tx_type: int, account_age_days: int, mcc: str, is_vpn: bool, noise: float
+        *,
+        amount: float,
+        tx_type: int,
+        account_age_days: int,
+        mcc: str,
+        is_vpn: bool,
+        noise: float,
     ) -> float:
         log_amount = math.log1p(amount)
         z = -7.1
@@ -139,7 +135,9 @@ class LocalTransactionClassifier:
         labels: list[int] = []
 
         for _ in range(self.rows):
-            amount = round(math.exp(rng.uniform(math.log(100), math.log(100_000))), 2)
+            amount = round(
+                math.exp(rng.uniform(math.log(100), math.log(100_000))), 2
+            )
             tx_type = rng.choices([0, 1, 2], weights=[0.42, 0.30, 0.28], k=1)[0]
             account_age_days = int(min(3650, rng.expovariate(1 / 420)))
             mcc = rng.choices(MCCS, weights=[0.50, 0.22, 0.20, 0.08], k=1)[0]
@@ -156,7 +154,7 @@ class LocalTransactionClassifier:
             if rng.random() < 0.04:
                 label = 1 - label
             features.append(
-                self._vectorize(
+                vectorize_transaction(
                     amount=amount,
                     tx_type=tx_type,
                     account_age_days=account_age_days,
@@ -169,35 +167,20 @@ class LocalTransactionClassifier:
         return features, labels
 
     def _train(self) -> None:
-        assert RandomForestClassifier is not None
         features, labels = self._generate_dataset()
-        x_train, x_valid, y_train, y_valid = train_test_split(
+        selection = train_and_select_model(
             features,
             labels,
-            test_size=0.22,
-            random_state=self.seed,
-            stratify=labels,
+            requested_algorithm=self.requested_algorithm,
+            seed=self.seed,
+            dataset_label="synthetic",
         )
-        model = RandomForestClassifier(
-            n_estimators=140,
-            max_depth=9,
-            min_samples_leaf=5,
-            class_weight="balanced_subsample",
-            random_state=self.seed,
-            n_jobs=1,
-        )
-        model.fit(x_train, y_train)
-        probabilities = model.predict_proba(x_valid)[:, 1]
-        predictions = [int(probability >= self.HEAVY_THRESHOLD) for probability in probabilities]
-        self.model = model
-        self.metrics = ModelMetrics(
-            accuracy=accuracy_score(y_valid, predictions),
-            precision=precision_score(y_valid, predictions, zero_division=0),
-            recall=recall_score(y_valid, predictions, zero_division=0),
-            roc_auc=roc_auc_score(y_valid, probabilities),
-            training_rows=len(x_train),
-            validation_rows=len(x_valid),
-        )
+        self.model = selection.model
+        self.selected_algorithm = selection.selected_algorithm
+        self.model_name = selection.model_name
+        self.threshold = selection.threshold
+        self.metrics = selection.metrics
+        self.candidate_metrics = selection.candidate_metrics
 
     def score_transaction(
         self,
@@ -215,10 +198,10 @@ class LocalTransactionClassifier:
                 account_age_days=account_age_days,
                 mcc=mcc,
                 is_vpn=is_vpn,
-                fallback_reason=self.error or "scikit-learn is not installed",
+                fallback_reason=self.error or "local ML dependencies are unavailable",
             )
 
-        vector = self._vectorize(
+        vector = vectorize_transaction(
             amount=amount,
             tx_type=tx_type,
             account_age_days=account_age_days,
@@ -226,10 +209,10 @@ class LocalTransactionClassifier:
             is_vpn=is_vpn,
         )
         probability = float(self.model.predict_proba([vector])[0][1])
-        is_heavy = probability >= self.HEAVY_THRESHOLD
+        is_heavy = probability >= self.threshold
         risk_score = int(round(probability * 100))
 
-        if probability >= 0.72:
+        if probability >= max(0.72, self.threshold + 0.12):
             risk_level = "high"
             task_path = "DEEP FRAUD CHECK"
         elif is_heavy:
@@ -254,7 +237,7 @@ class LocalTransactionClassifier:
             ),
             "classifier_source": "local_ml",
             "model_name": self.model_name,
-            "confidence": round(abs(probability - 0.5) * 2.0, 3),
+            "confidence": round(abs(probability - self.threshold) / max(self.threshold, 1 - self.threshold), 3),
             "api_used": False,
             "fallback_reason": None,
         }
@@ -264,7 +247,12 @@ class LocalTransactionClassifier:
             "available": self.available,
             "model_name": self.model_name,
             "dataset_source": self.dataset_source,
+            "requested_algorithm": self.requested_algorithm,
+            "selected_algorithm": self.selected_algorithm,
+            "threshold": round(self.threshold, 4),
+            "xgboost_available": xgboost_available(),
             "metrics": self.metrics.as_dict() if self.metrics else None,
+            "candidate_metrics": self.candidate_metrics,
             "artifact_path": str(self.artifact_path) if self.artifact_path else None,
             "error": self.error,
         }

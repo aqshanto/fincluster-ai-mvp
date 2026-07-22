@@ -5,9 +5,14 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY requirements.txt .
+ARG INSTALL_XGBOOST=false
+
+COPY requirements.txt requirements-xgboost.txt ./
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    if [ "$INSTALL_XGBOOST" = "true" ]; then \
+        pip install --no-cache-dir -r requirements-xgboost.txt; \
+    fi
 
 COPY . .
 

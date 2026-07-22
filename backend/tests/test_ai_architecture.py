@@ -8,7 +8,7 @@ from pathlib import Path
 from core.orchestrator import MFSOrchestrator, StrategyMetrics
 from core.transaction_store import TransactionDatasetStore
 from ml.hybrid_ai_engine import HybridAIEngine
-from ml.local_model import local_model
+from ml.local_model import LocalTransactionClassifier, local_model
 
 
 class LocalModelTests(unittest.TestCase):
@@ -17,6 +17,23 @@ class LocalModelTests(unittest.TestCase):
         self.assertTrue(status["available"])
         self.assertIsNotNone(status["metrics"])
         self.assertGreater(status["metrics"]["roc_auc"], 0.75)
+        self.assertGreater(status["metrics"]["f1"], 0.60)
+        self.assertIn(status["selected_algorithm"], {"random_forest", "xgboost"})
+        self.assertIn("random_forest", status["candidate_metrics"])
+
+    def test_xgboost_is_evaluated_when_available(self) -> None:
+        if not local_model.status()["xgboost_available"]:
+            self.skipTest("optional XGBoost dependency is not installed")
+        old_algorithm = os.environ.get("LOCAL_MODEL_ALGORITHM")
+        os.environ["LOCAL_MODEL_ALGORITHM"] = "auto"
+        try:
+            challenger = LocalTransactionClassifier(rows=1200)
+            self.assertIn("xgboost", challenger.status()["candidate_metrics"])
+        finally:
+            if old_algorithm is None:
+                os.environ.pop("LOCAL_MODEL_ALGORITHM", None)
+            else:
+                os.environ["LOCAL_MODEL_ALGORITHM"] = old_algorithm
 
     def test_risky_transaction_scores_above_normal_transaction(self) -> None:
         normal = local_model.score_transaction(

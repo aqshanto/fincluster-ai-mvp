@@ -85,3 +85,10 @@ PaySim is a useful later benchmark because it is a synthetic mobile-money transa
 - External inference happens outside the global simulation lock.
 - Use persistent storage for `AI_DATASET_PATH`; an ephemeral deployment filesystem can lose collected rows after a restart.
 - The local model is trained at process startup unless a trusted reviewed-data artifact is configured.
+
+## Local candidate model selection (v2)
+
+The local classifier now supports `LOCAL_MODEL_ALGORITHM=random_forest`, `xgboost`, or `auto`.
+In `auto` mode, Random Forest and XGBoost are trained on the same training split, each decision threshold is tuned on a validation split, and the stronger candidate is selected using a workload-oriented score that prioritizes F1 and heavy-task recall. The selected candidate is evaluated on a separate held-out test split. Candidate and winner metrics are visible through `/api/v1/ai/status`.
+
+XGBoost is an optional local dependency in `backend/requirements-xgboost.txt`. The base Render build remains lightweight and defaults to Random Forest because the free Render instance has limited memory. Local Docker Compose installs the optional challenger by default.

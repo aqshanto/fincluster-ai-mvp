@@ -18,3 +18,14 @@ build/
 backend/data/*.db
 backend/data/*.db-*
 backend/models/*.joblib
+
+# Local development environments and caches
+.venv/
+backend/.venv/
+.pytest_cache/
+*.log
+frontend/.turbo/
+
+# Python virtual environments
+backend/.venv/
+frontend/.next/
