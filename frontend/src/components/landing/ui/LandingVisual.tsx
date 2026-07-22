@@ -89,7 +89,7 @@ export default function LandingVisual({
 
       <div className="group relative">
         <div
-          className={`pointer-events-none absolute -inset-5 rounded-[2rem] blur-3xl ${styles.glow}`}
+          className={`pointer-events-none absolute -inset-5 rounded-4xl blur-3xl ${styles.glow}`}
           aria-hidden="true"
         />
 
