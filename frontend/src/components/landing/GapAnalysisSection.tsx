@@ -16,58 +16,62 @@ const gaps = [
     icon: Route,
     title: "Blind routing",
     description:
-      "Round-robin sends work to the next node without understanding transaction complexity or node capability.",
+      "Round-robin selects the next node without understanding which workload that node is best equipped to process.",
     tone: "rose" as const,
   },
   {
     icon: Gauge,
     title: "Unequal workloads",
     description:
-      "A balance inquiry and a suspicious high-value cash-out should not consume the same processing path.",
+      "A balance inquiry and a high-risk cash-out should not consume the same verification path or compute budget.",
     tone: "amber" as const,
   },
   {
     icon: CircleDollarSign,
     title: "Infrastructure waste",
     description:
-      "Expensive compute can be wasted on low-risk tasks while lower-cost nodes remain underused.",
+      "Powerful nodes can be wasted on simple tasks while cheaper resources remain underused.",
     tone: "rose" as const,
   },
   {
     icon: ThermometerSun,
     title: "Weak anomaly response",
     description:
-      "Static routing may continue assigning work to overloaded, overheated, or unhealthy infrastructure.",
+      "Static routing may keep assigning work to overloaded, overheated, or unavailable infrastructure.",
     tone: "amber" as const,
   },
   {
     icon: BrainCircuit,
-    title: "Unsafe AI automation",
+    title: "Unsupervised automation risk",
     description:
-      "A model can be uncertain or wrong, yet a fully automatic system may still act without human verification.",
+      "A model can be uncertain or wrong, yet an unguarded system may still execute its prediction automatically.",
     tone: "violet" as const,
   },
   {
     icon: AlertTriangle,
-    title: "Limited learning",
+    title: "No trusted learning loop",
     description:
-      "Without reviewed labels, a system cannot measure real mistakes or improve in a controlled way.",
+      "Without verified labels, a team cannot measure real mistakes or retrain safely from reliable evidence.",
     tone: "rose" as const,
   },
 ];
 
 export default function GapAnalysisSection() {
   return (
-    <section id="problem" className="border-b border-slate-800/70 py-24">
+    <section
+      id="problem"
+      className="scroll-mt-24 border-b border-slate-800/70 py-24"
+    >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
-          eyebrow="Real-life gap analysis"
-          title="The problem is not only fraud detection. It is deciding how every transaction should be processed."
+          eyebrow="The real-world gap"
+          title="Traditional routing can balance traffic and still make the wrong processing decision."
           description={
             <p>
-              Traditional routing can distribute traffic evenly while still
-              making poor decisions. FinCluster focuses on the missing link
-              between transaction intelligence and infrastructure behavior.
+              Existing systems often separate transaction analysis from
+              infrastructure routing. FinCluster connects the two: what the
+              transaction needs, which node can provide it, and when a human
+              should intervene.
             </p>
           }
         />
@@ -83,7 +87,7 @@ export default function GapAnalysisSection() {
           alt="Side-by-side comparison of legacy round-robin routing and FinCluster AI workload-aware routing"
           label="Legacy Routing vs FinCluster AI"
           tone="blue"
-          caption="Both strategies receive the same workload. Legacy routing rotates blindly, while FinCluster evaluates workload complexity, node capability, health, and fallback availability."
+          caption="Both strategies receive the same workload. Legacy routing rotates blindly; FinCluster considers workload type, node capability, health, and fallback availability."
           className="mt-16"
         />
       </div>

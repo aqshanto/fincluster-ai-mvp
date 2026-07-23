@@ -1,19 +1,27 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  CategoryScale,
   Chart as ChartJS,
+  Legend,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Tooltip,
+} from "chart.js";
+import { Line } from "react-chartjs-2";
+
+import { BenchmarkData } from "@/types";
+
+ChartJS.register(
   CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
   Tooltip,
   Legend,
-} from "chart.js";
-import { Line } from "react-chartjs-2";
-import { BenchmarkData } from "@/types";
-
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
+);
 
 interface CostChartProps {
   runId: number;
@@ -49,12 +57,12 @@ export default function CostChart({
 
   useEffect(() => {
     const label = simTime.substring(0, 5);
-    // Streaming telemetry is an external source; chart history intentionally
-    // synchronizes it into a bounded local series.
+
     setSeries((current) => {
       const base = runId !== previousRunId.current ? emptySeries() : current;
       previousRunId.current = runId;
       const lastIndex = base.labels.length - 1;
+
       if (base.labels[lastIndex] === label) {
         const legacy = [...base.legacy];
         const optimized = [...base.optimized];
@@ -70,6 +78,7 @@ export default function CostChart({
       };
 
       if (next.labels.length <= 30) return next;
+
       return {
         labels: next.labels.slice(-30),
         legacy: next.legacy.slice(-30),
@@ -81,7 +90,9 @@ export default function CostChart({
   useEffect(() => {
     const handleInstantReset = () => setSeries(emptySeries());
     window.addEventListener("force_reset_ui", handleInstantReset);
-    return () => window.removeEventListener("force_reset_ui", handleInstantReset);
+
+    return () =>
+      window.removeEventListener("force_reset_ui", handleInstantReset);
   }, []);
 
   const data = {
@@ -115,13 +126,21 @@ export default function CostChart({
       legend: {
         display: true,
         position: "top" as const,
-        labels: { color: "#cbd5e1", font: { size: 10 } },
+        labels: {
+          color: "#cbd5e1",
+          boxWidth: 18,
+          font: { size: 10 },
+        },
       },
     },
     scales: {
       x: {
         grid: { color: "rgba(51, 65, 85, 0.3)" },
-        ticks: { color: "#94a3b8", font: { size: 9 }, maxTicksLimit: 6 },
+        ticks: {
+          color: "#94a3b8",
+          font: { size: 9 },
+          maxTicksLimit: 6,
+        },
       },
       y: {
         grid: { color: "rgba(51, 65, 85, 0.3)" },
@@ -136,40 +155,60 @@ export default function CostChart({
   };
 
   return (
-    <div className="glass-panel p-4 rounded-xl border-l-4 border-l-emerald-500 pointer-events-auto shadow-lg">
-      <div className="flex justify-between items-start mb-1">
+    <section className="glass-panel pointer-events-auto w-full rounded-xl border-l-4 border-l-emerald-500 p-4 shadow-lg">
+      <div className="mb-1 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-white font-semibold text-sm">Fair Benchmark</h3>
-          <p className="text-[10px] text-slate-400">
+          <h3 className="text-sm font-semibold text-white sm:text-base lg:text-sm">
+            Fair Benchmark
+          </h3>
+          <p className="text-[10px] text-slate-400 sm:text-xs lg:text-[10px]">
             Same seeded transactions and service rates
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] text-emerald-400 uppercase font-bold tracking-wider">
-            Total Saved
+
+        <div className="shrink-0 text-right">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 sm:text-[10px]">
+            Total saved
           </p>
-          <p className="text-xl font-bold text-emerald-400 metric-value">
+          <p className="metric-value text-xl font-bold text-emerald-400 sm:text-2xl lg:text-xl">
             ${savedCost.toFixed(2)}
           </p>
         </div>
       </div>
 
-      <div className="w-full h-32 mt-1">
+      <div className="mt-2 h-48 w-full sm:h-56 lg:h-32">
         <Line data={data} options={options} />
       </div>
 
       {benchmark && (
-        <div className="mt-2 grid grid-cols-[1.3fr_1fr_1fr] text-[9px] font-mono border-t border-slate-700/70 pt-2 gap-y-1">
+        <div className="mt-3 grid grid-cols-[1.3fr_1fr_1fr] gap-y-1.5 border-t border-slate-700/70 pt-3 font-mono text-[9px] sm:text-[10px] lg:text-[9px]">
           <span className="text-slate-500">Metric</span>
-          <span className="text-emerald-400 text-right">AI</span>
-          <span className="text-red-400 text-right">Legacy</span>
-          <MetricRow label="P95 latency" ai={`${benchmark.ai.p95_latency_ms} ms`} legacy={`${benchmark.legacy.p95_latency_ms} ms`} />
-          <MetricRow label="Failures" ai={benchmark.ai.failures} legacy={benchmark.legacy.failures} />
-          <MetricRow label="Throughput" ai={`${benchmark.ai.throughput_tx_per_min}/min`} legacy={`${benchmark.legacy.throughput_tx_per_min}/min`} />
-          <MetricRow label="Max temp" ai={`${benchmark.ai.max_temperature_c}°C`} legacy={`${benchmark.legacy.max_temperature_c}°C`} />
+          <span className="text-right text-emerald-400">AI</span>
+          <span className="text-right text-red-400">Legacy</span>
+
+          <MetricRow
+            label="P95 latency"
+            ai={`${benchmark.ai.p95_latency_ms} ms`}
+            legacy={`${benchmark.legacy.p95_latency_ms} ms`}
+          />
+          <MetricRow
+            label="Failures"
+            ai={benchmark.ai.failures}
+            legacy={benchmark.legacy.failures}
+          />
+          <MetricRow
+            label="Throughput"
+            ai={`${benchmark.ai.throughput_tx_per_min}/min`}
+            legacy={`${benchmark.legacy.throughput_tx_per_min}/min`}
+          />
+          <MetricRow
+            label="Max temp"
+            ai={`${benchmark.ai.max_temperature_c}°C`}
+            legacy={`${benchmark.legacy.max_temperature_c}°C`}
+          />
         </div>
       )}
-    </div>
+    </section>
   );
 }
 

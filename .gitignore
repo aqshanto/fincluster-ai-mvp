@@ -15,7 +15,9 @@ dist/
 build/
 
 # Runtime ML data and trusted local artifacts
+backend/.env
 backend/data/*.db
 backend/data/*.db-*
 backend/models/*.joblib*
 backend/.venv/
+*.sqlite

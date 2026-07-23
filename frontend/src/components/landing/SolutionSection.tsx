@@ -3,6 +3,7 @@ import {
   HeartPulse,
   Route,
   ShieldCheck,
+  Sparkles,
   TrendingUp,
 } from "lucide-react";
 
@@ -14,51 +15,54 @@ const solutions = [
     icon: BrainCircuit,
     title: "Workload-aware classification",
     description:
-      "Manual transactions are classified as Heavy or Light using a local machine-learning model with explainable evidence.",
+      "Incoming simulator transactions are classified as Heavy or Light with a local model, confidence score, and explainable evidence.",
     tone: "blue" as const,
   },
   {
     icon: Route,
-    title: "Intelligent node selection",
+    title: "Best-fit node selection",
     description:
-      "Heavy verification tasks go to capable nodes while low-risk tasks use lower-cost compute resources.",
+      "Heavy verification uses capable compute; low-risk work follows the lower-cost fast path.",
     tone: "emerald" as const,
   },
   {
     icon: HeartPulse,
     title: "Health-aware fallback",
     description:
-      "When a preferred node is hot, overloaded, or unavailable, the scheduler selects a safer fallback route.",
+      "The scheduler avoids nodes that are hot, overloaded, crashed, or otherwise unsuitable.",
     tone: "rose" as const,
   },
   {
     icon: ShieldCheck,
     title: "Human-review protection",
     description:
-      "Low-confidence, fallback, or manually flagged transactions are held until an operator confirms Heavy or Light.",
+      "Low-confidence, fallback, or manually flagged transactions pause until an operator decides Heavy or Light.",
     tone: "amber" as const,
   },
   {
     icon: TrendingUp,
-    title: "Controlled retraining",
+    title: "Controlled improvement",
     description:
-      "Trusted reviewed labels support model improvement, but promotion happens only after validation and quality gates.",
+      "Verified labels can retrain multiple candidates, but a new model is promoted only after quality checks.",
     tone: "violet" as const,
   },
 ];
 
 export default function SolutionSection() {
   return (
-    <section id="solution" className="border-b border-slate-800/70 py-24">
+    <section
+      id="solution"
+      className="scroll-mt-24 border-b border-slate-800/70 py-24"
+    >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
-          eyebrow="What FinCluster fixes"
-          title="One system connecting AI classification, resource-aware routing, human control, and continuous improvement."
+          eyebrow="What FinCluster changes"
+          title="One lifecycle links AI decisions to infrastructure behavior and human accountability."
           description={
             <p>
-              The MVP does more than output a prediction. It shows how that
-              prediction changes node selection, latency, cost, resilience, and
-              operator oversight in real time.
+              FinCluster does not stop at a Heavy or Light prediction. It shows
+              how that result changes node choice, latency, cost, anomaly
+              handling, human review, and future model evaluation.
             </p>
           }
           align="center"
@@ -68,6 +72,20 @@ export default function SolutionSection() {
           {solutions.map((solution) => (
             <FeatureCard key={solution.title} {...solution} />
           ))}
+        </div>
+
+        <div className="mx-auto mt-8 flex max-w-4xl items-start gap-4 rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-5">
+          <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300" />
+          <div>
+            <p className="font-black text-white">
+              The differentiator: prediction becomes an operational decision.
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              Many AI demos end after classification. FinCluster continues into
+              routing, resilience, explainability, human override, measured
+              feedback, and safe candidate-model promotion.
+            </p>
+          </div>
         </div>
       </div>
     </section>

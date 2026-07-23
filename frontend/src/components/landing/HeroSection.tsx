@@ -15,40 +15,48 @@ import LandingVisual from "@/components/landing/ui/LandingVisual";
 import RouteButton from "@/components/landing/ui/RouteButton";
 
 const badges = [
-  "Local machine learning",
-  "Human-in-the-loop",
+  "Local-first AI",
+  "Human-controlled decisions",
   "Explainable routing",
-  "AI vs legacy benchmark",
+  "Fair AI vs legacy benchmark",
   "Anomaly-aware fallback",
 ];
 
 export default function HeroSection() {
   return (
-    <section className="relative overflow-hidden border-b border-slate-800/70">
+    <section
+      id="top"
+      className="relative scroll-mt-24 overflow-hidden border-b border-slate-800/70"
+    >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(37,99,235,0.16),transparent_34%),radial-gradient(circle_at_80%_30%,rgba(16,185,129,0.11),transparent_28%)]" />
-
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(30,41,59,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(30,41,59,0.18)_1px,transparent_1px)] bg-size-[42px_42px] mask-[linear-gradient(to_bottom,black,transparent_90%)]" />
 
-      <div className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
-        <div className="grid items-center gap-12 lg:min-h-170 lg:grid-cols-[1.04fr_0.96fr]">
+      <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+        <div className="grid items-center gap-12 lg:min-h-160 lg:grid-cols-[1.04fr_0.96fr]">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-bold text-cyan-200">
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-bold text-cyan-200 sm:text-xs">
               <Zap className="h-3.5 w-3.5" />
-              AI-powered MFS transaction routing simulator
+              Working MFS routing and AI-governance simulator
             </div>
 
-            <h1 className="mt-6 max-w-4xl text-4xl font-black leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-7xl">
+            <h1 className="mt-6 max-w-3xl text-4xl font-black leading-[1.04] tracking-tight text-white sm:text-5xl lg:text-6xl">
               Smarter MFS routing.
               <span className="block bg-linear-to-r from-blue-300 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">
-                Safer decisions. Lower infrastructure cost.
+                Safer decisions.
+              </span>
+              <span className="block bg-linear-to-r from-blue-300 via-cyan-300 to-emerald-300 bg-clip-text text-transparent sm:hidden">
+                Lower cost.
+              </span>
+              <span className="hidden bg-linear-to-r from-blue-300 via-cyan-300 to-emerald-300 bg-clip-text text-transparent sm:block">
+                Lower infrastructure cost.
               </span>
             </h1>
 
             <p className="mt-6 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
-              FinCluster AI compares traditional round-robin routing with an
-              intelligent scheduler that classifies transaction workloads,
-              checks node health, handles anomalies, and sends uncertain
-              decisions to a human operator before execution.
+              FinCluster AI is a working Mobile Financial Services simulator. It
+              classifies Heavy and Light processing workloads, checks node
+              health, compares AI routing with legacy round-robin on the same
+              traffic, and pauses uncertain decisions for human review.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -56,7 +64,7 @@ export default function HeroSection() {
                 href="/dashboard"
                 icon={<Network className="h-4 w-4" />}
               >
-                Launch live dashboard
+                Open live dashboard
               </RouteButton>
 
               <RouteButton
@@ -64,15 +72,15 @@ export default function HeroSection() {
                 variant="secondary"
                 icon={<Smartphone className="h-4 w-4" />}
               >
-                Try a manual transaction
+                Try a transaction
               </RouteButton>
 
               <RouteButton
-                href="#workflow"
+                href="#demo"
                 variant="ghost"
                 icon={<ArrowRight className="h-4 w-4" />}
               >
-                See how it works
+                Follow the judge demo
               </RouteButton>
             </div>
 
@@ -97,7 +105,6 @@ export default function HeroSection() {
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-300">
                     Live decision path
                   </p>
-
                   <p className="mt-1 text-sm text-slate-500">
                     One transaction, two routing strategies
                   </p>
@@ -115,7 +122,6 @@ export default function HeroSection() {
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-300">
                       <Smartphone className="h-5 w-5" />
                     </div>
-
                     <div>
                       <p className="font-bold text-white">MFS transaction</p>
                       <p className="text-xs text-slate-500">
@@ -132,11 +138,10 @@ export default function HeroSection() {
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
                       <BrainCircuit className="h-5 w-5" />
                     </div>
-
                     <div>
                       <p className="font-bold text-white">Local AI analysis</p>
                       <p className="text-xs text-slate-500">
-                        Heavy or Light workload + confidence
+                        Workload probability + confidence
                       </p>
                     </div>
                   </div>
@@ -146,15 +151,13 @@ export default function HeroSection() {
               <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
                 <div className="flex items-start gap-3">
                   <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
-
                   <div>
                     <p className="text-sm font-bold text-white">
-                      Uncertain prediction? Hold for human review.
+                      Low confidence? Hold the transaction for review.
                     </p>
-
                     <p className="mt-1 text-xs leading-5 text-slate-400">
-                      The transaction is not routed until an operator confirms
-                      the correct processing workload.
+                      The operator confirms or corrects the processing workload
+                      before the transaction is routed.
                     </p>
                   </div>
                 </div>
@@ -165,7 +168,7 @@ export default function HeroSection() {
                   {
                     icon: Cpu,
                     title: "Heavy GPU",
-                    note: "Deep fraud checks",
+                    note: "Enhanced verification",
                     tone: "text-rose-300 border-rose-500/25 bg-rose-500/5",
                   },
                   {
@@ -177,7 +180,7 @@ export default function HeroSection() {
                   {
                     icon: CircleDollarSign,
                     title: "Scaler",
-                    note: "Burst capacity",
+                    note: "Burst or fallback capacity",
                     tone: "text-emerald-300 border-emerald-500/25 bg-emerald-500/5",
                   },
                 ].map(({ icon: Icon, title, note, tone }) => (
@@ -192,12 +195,10 @@ export default function HeroSection() {
               <div className="mt-4 flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
                   <Landmark className="h-4 w-4 text-slate-400" />
-
                   <span className="text-xs text-slate-400">
-                    AI and legacy process the same workload
+                    AI and legacy receive the same seeded workload
                   </span>
                 </div>
-
                 <span className="font-mono text-xs font-bold text-emerald-300">
                   FAIR BENCHMARK
                 </span>
@@ -211,7 +212,7 @@ export default function HeroSection() {
           alt="FinCluster AI overview showing mobile financial transactions entering an AI engine and being routed to GPU, CPU, scaler, or human review"
           label="FinCluster System Overview"
           tone="cyan"
-          caption="FinCluster AI connects transaction classification, infrastructure-aware routing, anomaly handling, human review, and controlled model improvement."
+          caption="A single explainable lifecycle connects workload classification, health-aware routing, human review, and controlled model improvement."
           priority
           aspectClassName="aspect-[3/2]"
           className="mt-14"

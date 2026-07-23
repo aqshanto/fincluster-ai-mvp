@@ -13,43 +13,47 @@ import SectionHeading from "@/components/landing/ui/SectionHeading";
 const phases = [
   {
     icon: Database,
-    title: "100 reviewed labels",
-    note: "Minimum before first controlled retraining",
+    title: "Wait for enough trusted data",
+    note: "At least 100 reviewed transactions, including both Heavy and Light examples",
   },
   {
     icon: FlaskConical,
     title: "Train both candidates",
-    note: "Random Forest and XGBoost use the same data",
+    note: "Random Forest and XGBoost use the same reviewed dataset",
   },
   {
     icon: FileCheck2,
-    title: "Evaluate honestly",
-    note: "Validation threshold tuning + held-out test metrics",
+    title: "Tune and test honestly",
+    note: "Threshold tuning uses validation data; final metrics use a held-out test split",
   },
   {
     icon: ShieldCheck,
     title: "Apply quality gates",
-    note: "Recall, balanced accuracy, and selection score",
+    note: "Recall, balanced accuracy, and the overall selection score must pass",
   },
   {
     icon: RefreshCw,
     title: "Promote and hot-load",
-    note: "Only the approved artifact replaces the live model",
+    note: "Only an approved artifact can replace the running local model",
   },
 ];
 
 export default function RetrainingSection() {
   return (
-    <section id="retraining" className="border-b border-slate-800/70 py-24">
+    <section
+      id="retraining"
+      className="scroll-mt-24 border-b border-slate-800/70 py-24"
+    >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
           eyebrow="Controlled retraining"
-          title="The model learns from reviewed decisions—not from its own guesses."
+          title="Verified labels create the learning loop—not the model's own guesses."
           description={
             <p>
-              The first retraining waits for enough trusted data. Every later
-              cycle requires another full reviewed batch, and the existing model
-              remains online if training fails or the challenger is weaker.
+              The current live MVP keeps automatic retraining disabled. The
+              pipeline has been tested separately with isolated reviewed data,
+              including threshold checks, two retraining cycles, artifact
+              promotion, and hot-loading.
             </p>
           }
           align="center"
@@ -62,10 +66,8 @@ export default function RetrainingSection() {
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-500/25 bg-violet-500/5 text-violet-300">
                   <Icon className="h-5 w-5" />
                 </div>
-
                 <div>
                   <p className="font-bold text-white">{title}</p>
-
                   <p className="mt-1 text-sm leading-6 text-slate-400">
                     {note}
                   </p>
@@ -84,50 +86,50 @@ export default function RetrainingSection() {
           alt="Controlled FinCluster retraining pipeline using human-reviewed labels, Random Forest, XGBoost, validation metrics, quality gates, promotion, and hot loading"
           label="Controlled Model Improvement"
           tone="violet"
-          caption="The model never retrains from its own guesses. Human-reviewed labels train candidate models, and only a candidate that passes the quality gates is promoted."
+          caption="Human-reviewed labels train candidate models. A challenger replaces the live model only after it passes the configured quality gates."
           className="mt-16"
         />
 
         <div className="mx-auto mt-12 grid max-w-4xl gap-4 md:grid-cols-3">
           <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5 text-center">
             <p className="font-mono text-3xl font-black text-blue-300">100</p>
-
-            <p className="mt-2 text-sm font-bold text-white">First threshold</p>
-
-            <p className="mt-1 text-xs text-slate-500">Reviewed transactions</p>
+            <p className="mt-2 text-sm font-bold text-white">
+              First reviewed threshold
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Before initial retraining
+            </p>
           </div>
 
           <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5 text-center">
             <p className="font-mono text-3xl font-black text-emerald-300">25</p>
-
-            <p className="mt-2 text-sm font-bold text-white">Next batch</p>
-
-            <p className="mt-1 text-xs text-slate-500">New reviewed labels</p>
+            <p className="mt-2 text-sm font-bold text-white">
+              Later review batch
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Before another cycle
+            </p>
           </div>
 
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 text-center">
             <p className="font-mono text-3xl font-black text-amber-300">OFF</p>
-
             <p className="mt-2 text-sm font-bold text-white">
-              Development mode
+              Live auto-retraining
             </p>
-
             <p className="mt-1 text-xs text-slate-500">
-              Auto promotion stays disabled
+              Disabled during development
             </p>
           </div>
         </div>
 
         <div className="mx-auto mt-8 max-w-4xl rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5">
           <p className="text-sm font-black text-amber-200">
-            Hackathon demonstration policy
+            Honest hackathon demonstration
           </p>
-
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            A separate controlled reviewed dataset validates retraining,
-            promotion, and hot-loading without contaminating the live review
-            database. Near-perfect metrics on that easy test dataset prove the
-            mechanism only—they are not a claim of real-world MFS accuracy.
+            The isolated retraining dataset deliberately contains clear classes,
+            so near-perfect test metrics prove that the retraining mechanism
+            works. They do not prove near-perfect accuracy on real MFS traffic.
           </p>
         </div>
       </div>

@@ -309,8 +309,8 @@ def train_and_select_model(
     )
 
     display_names = {
-        "random_forest": f"RandomForestClassifier-{dataset_label}-{model_version}",
-        "xgboost": f"XGBClassifier-{dataset_label}-{model_version}",
+        "random_forest": f"FinCluster-RandomForest-{dataset_label}-{model_version}",
+        "xgboost": f"FinCluster-XGBoost-{dataset_label}-{model_version}",
     }
     return ModelSelection(
         model=selected_model,

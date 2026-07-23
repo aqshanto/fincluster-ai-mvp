@@ -1,5 +1,5 @@
-import React from "react";
 import { Thermometer } from "lucide-react";
+
 import { NodeStatus } from "@/types";
 
 interface NodeCardProps {
@@ -30,42 +30,54 @@ export default function NodeCard({ node }: NodeCardProps) {
     barColor = "bg-amber-500";
   }
 
+  const visibleLoad = node.status === "crashed" ? 0 : Math.floor(node.load);
+
   return (
-    <div className="bg-slate-900/90 border border-slate-700 rounded-lg p-3 w-75 transition-all duration-300 shadow-lg pointer-events-auto">
-      <div className="flex justify-between items-start mb-2">
-        <div>
-          <h4 className="text-sm font-bold text-slate-200">{node.name}</h4>
-          <p className="text-[10px] text-slate-400 mt-0.5">
-            CPU Load:{" "}
-            <span>
-              {node.status === "crashed" ? 0 : Math.floor(node.load)}%
-            </span>
+    <article className="pointer-events-auto w-full rounded-xl border border-slate-700 bg-slate-900/90 p-4 shadow-lg transition-all duration-300">
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="truncate text-sm font-bold text-slate-200 sm:text-base lg:text-sm">
+            {node.name}
+          </h4>
+          <p className="mt-0.5 text-[10px] text-slate-400 sm:text-xs lg:text-[10px]">
+            CPU Load: <span>{visibleLoad}%</span>
           </p>
         </div>
-        <span className={`status-badge ${badgeClass}`}>{badgeText}</span>
+
+        <span className={`status-badge shrink-0 ${badgeClass}`}>
+          {badgeText}
+        </span>
       </div>
 
-      <div className="bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-800">
         <div
           className={`h-full transition-all duration-200 ${barColor}`}
-          style={{ width: `${node.status === "crashed" ? 0 : node.load}%` }}
-        ></div>
+          style={{ width: `${visibleLoad}%` }}
+        />
       </div>
 
-      <div className="flex justify-between items-center mt-3 text-xs font-mono border-t border-slate-700/60 pt-2">
+      <div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-700/60 pt-3 font-mono text-[11px] sm:text-xs lg:text-[11px]">
         <span
-          className={`flex items-center gap-1 ${node.status === "crashed" ? "text-red-500 font-bold" : node.status === "warning" ? "text-amber-500" : "text-slate-400"}`}
+          className={`flex items-center gap-1 ${
+            node.status === "crashed"
+              ? "font-bold text-red-500"
+              : node.status === "warning"
+                ? "text-amber-500"
+                : "text-slate-400"
+          }`}
         >
-          <Thermometer className="w-3.5 h-3.5" />
-          <span>{Math.floor(node.temp)}°C</span>
+          <Thermometer className="h-3.5 w-3.5" />
+          {Math.floor(node.temp)}°C
         </span>
-        <span className="text-slate-300">
-          Tasks: <span className="font-bold text-white">{node.assigned}</span>
+
+        <span className="text-center text-slate-300">
+          Tasks: <strong className="text-white">{node.assigned}</strong>
         </span>
-        <span className="text-slate-400 font-bold">
+
+        <span className="text-right font-bold text-slate-400">
           ${currentCost.toFixed(2)}/hr
         </span>
       </div>
-    </div>
+    </article>
   );
 }

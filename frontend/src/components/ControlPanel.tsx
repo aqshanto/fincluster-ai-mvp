@@ -1,22 +1,23 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
 import {
   Brain,
-  Zap,
-  Flame,
-  Lock,
-  Unlock,
-  RotateCcw,
-  Send,
+  ClipboardCheck,
   Cloud,
   Database,
-  ClipboardCheck,
+  Flame,
+  Lock,
+  RotateCcw,
+  Send,
+  Unlock,
+  Zap,
 } from "lucide-react";
-import axios from "axios";
+
 import api from "@/services/api";
-import TransactionModal from "./TransactionModal";
 import ReviewQueueModal from "./ReviewQueueModal";
+import TransactionModal from "./TransactionModal";
 
 interface ControlPanelProps {
   aiEnabled: boolean;
@@ -28,6 +29,9 @@ interface ControlPanelProps {
   datasetRows: number;
   pendingReviewCount: number;
 }
+
+const baseButton =
+  "flex min-h-11 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition-all sm:min-h-0 sm:text-sm";
 
 export default function ControlPanel({
   aiEnabled,
@@ -100,10 +104,13 @@ export default function ControlPanel({
         setShowLoginModal(true);
         return;
       }
+
       const detail = axios.isAxiosError<{ detail?: string }>(caught)
         ? caught.response?.data?.detail
         : undefined;
-      setActionMessage(detail || "Control action failed. Check the backend connection.");
+      setActionMessage(
+        detail || "Control action failed. Check the backend connection.",
+      );
     }
   };
 
@@ -112,7 +119,6 @@ export default function ControlPanel({
       window.dispatchEvent(new Event("force_reset_ui"));
       await api.post("/api/v1/control/reset");
     });
-
 
   const handleExportDataset = () =>
     requireOperator(async () => {
@@ -143,149 +149,151 @@ export default function ControlPanel({
 
   return (
     <>
-      <footer className="glass-panel p-4 flex justify-center items-center gap-3.5 z-20 pointer-events-auto flex-wrap">
-        <button
-          onClick={() =>
-            requireOperator(() => api.post("/api/v1/control/toggle-ai"))
-          }
-          className={`flex items-center gap-2 px-5 py-2 rounded-lg font-bold transition-all shadow-lg text-sm ${
-            aiEnabled
-              ? "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/30"
-              : "bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-600 shadow-none"
-          }`}
-        >
-          <Brain
-            className={`w-4 h-4 ${aiEnabled ? "animate-pulse" : ""}`}
-          />
-          <span>
-            Live View: {aiEnabled ? "AI Scheduler" : "Legacy Round-Robin"}
-          </span>
-        </button>
+      <footer className="glass-panel relative z-20 border-t border-slate-800/80 p-3 pointer-events-auto sm:p-4">
+        <div className="mx-auto grid w-full max-w-350 grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-3">
+          <button
+            type="button"
+            onClick={() =>
+              void requireOperator(() => api.post("/api/v1/control/toggle-ai"))
+            }
+            className={`${baseButton} col-span-2 shadow-lg sm:col-span-1 sm:px-5 ${
+              aiEnabled
+                ? "border-blue-500 bg-blue-600 text-white shadow-blue-500/30 hover:bg-blue-500"
+                : "border-slate-600 bg-slate-800 text-slate-400 shadow-none hover:bg-slate-700"
+            }`}
+          >
+            <Brain className={`h-4 w-4 ${aiEnabled ? "animate-pulse" : ""}`} />
+            <span>
+              Live View: {aiEnabled ? "AI Scheduler" : "Legacy Round-Robin"}
+            </span>
+          </button>
 
+          <button
+            type="button"
+            onClick={() =>
+              void requireOperator(() =>
+                api.post("/api/v1/control/toggle-external-ai"),
+              )
+            }
+            disabled={!externalAIAvailable}
+            title={
+              externalAIAvailable
+                ? `Manual transactions only: ${externalModel}`
+                : "Set GEMINI_API_KEY on the backend to enable manual API review"
+            }
+            className={`${baseButton} disabled:cursor-not-allowed disabled:opacity-45 ${
+              externalAIEnabled
+                ? "border-violet-400 bg-violet-600 text-white shadow-lg shadow-violet-500/30 hover:bg-violet-500"
+                : "border-slate-600 bg-slate-800 text-slate-300 hover:bg-slate-700"
+            }`}
+          >
+            <Cloud className="h-4 w-4" />
+            <span>Manual AI: {externalAIEnabled ? "ON" : "OFF"}</span>
+          </button>
 
-        <button
-          onClick={() =>
-            requireOperator(() =>
-              api.post("/api/v1/control/toggle-external-ai"),
-            )
-          }
-          disabled={!externalAIAvailable}
-          title={
-            externalAIAvailable
-              ? `Manual transactions only: ${externalModel}`
-              : "Set GEMINI_API_KEY on the backend to enable manual API review"
-          }
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all border text-sm disabled:cursor-not-allowed disabled:opacity-45 ${
-            externalAIEnabled
-              ? "bg-violet-600 hover:bg-violet-500 text-white border-violet-400 shadow-lg shadow-violet-500/30"
-              : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-600"
-          }`}
-        >
-          <Cloud className="w-4 h-4" />
-          <span>Manual AI API: {externalAIEnabled ? "ON" : "OFF"}</span>
-        </button>
+          <button
+            type="button"
+            onClick={() =>
+              void requireOperator(() =>
+                api.post("/api/v1/control/toggle-surge"),
+              )
+            }
+            className={`${baseButton} ${
+              surgeActive
+                ? "border-red-500 bg-red-600 text-white shadow-lg shadow-red-500/30 hover:bg-red-500"
+                : "border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
+            }`}
+          >
+            <Zap className="h-4 w-4" />
+            <span>{surgeActive ? "Stop Surge" : "Eid Surge"}</span>
+          </button>
 
-        <button
-          onClick={() =>
-            requireOperator(() => api.post("/api/v1/control/toggle-surge"))
-          }
-          className={`flex items-center gap-2 px-5 py-2 rounded-lg font-bold transition-all border text-sm ${
-            surgeActive
-              ? "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-500/30 border-red-500"
-              : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-600"
-          }`}
-        >
-          <Zap className="w-4 h-4" />
-          <span>
-            {surgeActive ? "Stop Traffic Surge" : "Trigger Eid Surge"}
-          </span>
-        </button>
+          <button
+            type="button"
+            onClick={() =>
+              void requireOperator(() =>
+                api.post("/api/v1/control/trigger-anomaly"),
+              )
+            }
+            className={`${baseButton} ${
+              anomalyActive
+                ? "animate-pulse border-amber-500 bg-amber-600 text-white hover:bg-amber-500"
+                : "border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
+            }`}
+          >
+            <Flame className="h-4 w-4 text-amber-400" />
+            <span>{anomalyActive ? "Stop Anomaly" : "Node Anomaly"}</span>
+          </button>
 
-        <button
-          onClick={() =>
-            requireOperator(() =>
-              api.post("/api/v1/control/trigger-anomaly"),
-            )
-          }
-          className={`flex items-center gap-2 px-5 py-2 rounded-lg font-bold transition-all border text-sm ${
-            anomalyActive
-              ? "bg-amber-600 hover:bg-amber-500 text-white animate-pulse border-amber-500"
-              : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-600"
-          }`}
-        >
-          <Flame className="w-4 h-4 text-amber-400" />
-          <span>
-            {anomalyActive ? "Stop Anomaly" : "Trigger Node 1 Anomaly"}
-          </span>
-        </button>
+          <button
+            type="button"
+            onClick={() =>
+              isLoggedIn ? setShowTxModal(true) : setShowLoginModal(true)
+            }
+            title="Inject realistic transactions with ISO-8583 metadata"
+            className={`${baseButton} border-emerald-600 bg-emerald-950/80 text-emerald-300 shadow-lg hover:bg-emerald-900 active:scale-95`}
+          >
+            <Send className="h-4 w-4 text-emerald-400" />
+            <span>Manual Tx</span>
+          </button>
 
-        <button
-          onClick={() =>
-            isLoggedIn ? setShowTxModal(true) : setShowLoginModal(true)
-          }
-          title="Inject realistic transactions with ISO-8583 metadata"
-          className="flex items-center gap-2 px-5 py-2 rounded-lg font-bold transition-all border bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-600 shadow-lg active:scale-95 text-sm"
-        >
-          <Send className="w-4 h-4 text-emerald-400" />
-          <span>Manual Tx</span>
-        </button>
+          <button
+            type="button"
+            onClick={() =>
+              isLoggedIn ? setShowReviewModal(true) : setShowLoginModal(true)
+            }
+            title="Review uncertain manual transactions before routing"
+            className={`${baseButton} ${
+              pendingReviewCount > 0
+                ? "border-amber-600 bg-amber-950 text-amber-300 shadow-lg shadow-amber-500/20 hover:bg-amber-900"
+                : "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+            }`}
+          >
+            <ClipboardCheck className="h-4 w-4" />
+            <span>Reviews {pendingReviewCount}</span>
+          </button>
 
-        <button
-          onClick={() =>
-            isLoggedIn ? setShowReviewModal(true) : setShowLoginModal(true)
-          }
-          title="Review uncertain manual transactions before routing"
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all border text-sm ${
-            pendingReviewCount > 0
-              ? "bg-amber-950 hover:bg-amber-900 text-amber-300 border-amber-600 shadow-lg shadow-amber-500/20"
-              : "bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700"
-          }`}
-        >
-          <ClipboardCheck className="w-4 h-4" />
-          <span>Reviews {pendingReviewCount}</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => void handleReset()}
+            title="Reset both clusters, chart, time, tasks, and routing events"
+            className={`${baseButton} border-rose-700 bg-rose-950/80 text-rose-300 shadow-lg hover:bg-rose-900 active:scale-95`}
+          >
+            <RotateCcw className="h-4 w-4 text-rose-400" />
+            <span>Reset Sim</span>
+          </button>
 
-        <button
-          onClick={handleReset}
-          title="Reset both clusters, chart, time, tasks, and routing events"
-          className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all border bg-rose-950/80 hover:bg-rose-900 text-rose-300 border-rose-700 shadow-lg active:scale-95 text-sm"
-        >
-          <RotateCcw className="w-4 h-4 text-rose-400" />
-          <span>Reset Sim</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => void handleExportDataset()}
+            title="Export privacy-safe collected features and reviewed labels"
+            className={`${baseButton} border-cyan-800 bg-slate-900 text-cyan-300 hover:bg-slate-800`}
+          >
+            <Database className="h-4 w-4" />
+            <span>{exporting ? "Exporting..." : `Dataset ${datasetRows}`}</span>
+          </button>
 
+          <div className="mx-1 hidden h-6 w-px bg-slate-700 sm:block" />
 
-        <button
-          onClick={handleExportDataset}
-          title="Export privacy-safe collected features and reviewed labels"
-          className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all border bg-slate-900 hover:bg-slate-800 text-cyan-300 border-cyan-800 text-sm"
-        >
-          <Database className="w-4 h-4" />
-          <span>{exporting ? "Exporting..." : `Dataset ${datasetRows}`}</span>
-        </button>
+          <button
+            type="button"
+            onClick={isLoggedIn ? handleLogout : () => setShowLoginModal(true)}
+            className={`${baseButton} col-span-2 border-slate-700 bg-slate-900 font-mono text-slate-300 hover:border-blue-500 sm:col-span-1`}
+          >
+            {isLoggedIn ? (
+              <Unlock className="h-3.5 w-3.5 text-emerald-400" />
+            ) : (
+              <Lock className="h-3.5 w-3.5 text-amber-400" />
+            )}
+            <span>{isLoggedIn ? "Operator: Sign out" : "Operator Login"}</span>
+          </button>
 
-        <div className="w-px h-6 bg-slate-700 mx-1" />
-
-        <button
-          onClick={
-            isLoggedIn ? handleLogout : () => setShowLoginModal(true)
-          }
-          className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono hover:border-blue-500 text-slate-300"
-        >
-          {isLoggedIn ? (
-            <Unlock className="w-3.5 h-3.5 text-emerald-400" />
-          ) : (
-            <Lock className="w-3.5 h-3.5 text-amber-400" />
+          {actionMessage && (
+            <p className="col-span-2 text-center text-[11px] text-amber-300 sm:basis-full">
+              {actionMessage}
+            </p>
           )}
-          <span>
-            {isLoggedIn ? "Operator: Sign out" : "Operator Login"}
-          </span>
-        </button>
-        {actionMessage && (
-          <p className="basis-full text-center text-[11px] text-amber-300">
-            {actionMessage}
-          </p>
-        )}
+        </div>
       </footer>
 
       {showTxModal && (
@@ -313,26 +321,26 @@ export default function ControlPanel({
       )}
 
       {showLoginModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center z-50 pointer-events-auto">
-          <div className="glass-panel p-6 rounded-xl w-87.5 border border-slate-600 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
-              <Lock className="w-5 h-5 text-blue-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm pointer-events-auto">
+          <div className="glass-panel w-full max-w-sm rounded-xl border border-slate-600 p-5 shadow-2xl sm:p-6">
+            <h3 className="mb-1 flex items-center gap-2 text-lg font-bold text-white">
+              <Lock className="h-5 w-5 text-blue-400" />
               Operator Authentication
             </h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Telemetry is public. A signed operator token is required to
-              change simulation state or inject transactions.
+            <p className="mb-4 text-xs text-slate-400">
+              Telemetry is public. A signed operator token is required to change
+              simulation state or inject transactions.
             </p>
 
             {error && (
-              <p className="text-xs text-red-400 bg-red-950/50 p-2 rounded mb-3 border border-red-800">
+              <p className="mb-3 rounded border border-red-800 bg-red-950/50 p-2 text-xs text-red-400">
                 {error}
               </p>
             )}
 
             <form onSubmit={handleLogin} className="space-y-3">
               <label className="block">
-                <span className="text-xs text-slate-300 block mb-1">
+                <span className="mb-1 block text-xs text-slate-300">
                   Username
                 </span>
                 <input
@@ -343,8 +351,9 @@ export default function ControlPanel({
                   className="input-style text-sm"
                 />
               </label>
+
               <label className="block">
-                <span className="text-xs text-slate-300 block mb-1">
+                <span className="mb-1 block text-xs text-slate-300">
                   Password
                 </span>
                 <input
@@ -355,10 +364,11 @@ export default function ControlPanel({
                   className="input-style text-sm"
                 />
               </label>
+
               <div className="flex gap-2 pt-2">
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded text-sm"
+                  className="flex-1 rounded bg-blue-600 py-2 text-sm font-bold text-white hover:bg-blue-500"
                 >
                   Sign in
                 </button>
@@ -368,7 +378,7 @@ export default function ControlPanel({
                     setShowLoginModal(false);
                     setError("");
                   }}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 px-4 rounded text-sm"
+                  className="rounded bg-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
                 >
                   Cancel
                 </button>

@@ -3,6 +3,7 @@ import FinalCtaSection from "@/components/landing/FinalCtaSection";
 import GapAnalysisSection from "@/components/landing/GapAnalysisSection";
 import HeroSection from "@/components/landing/HeroSection";
 import HumanReviewSection from "@/components/landing/HumanReviewSection";
+import JudgeDemoSection from "@/components/landing/JudgeDemoSection";
 import LandingFooter from "@/components/landing/LandingFooter";
 import LandingNav from "@/components/landing/LandingNav";
 import LimitationsSection from "@/components/landing/LimitationsSection";
@@ -24,6 +25,7 @@ export default function LandingPage() {
         <HumanReviewSection />
         <RetrainingSection />
         <EvidenceSection />
+        <JudgeDemoSection />
         <LimitationsSection />
         <FinalCtaSection />
       </main>
