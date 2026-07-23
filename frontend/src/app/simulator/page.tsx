@@ -8,6 +8,7 @@ import {
   ArrowRight,
   CheckCircle,
   CheckCircle2,
+  ClipboardCheck,
   Cpu,
   Globe,
   Lock,
@@ -27,6 +28,7 @@ export default function TransactionSimulatorPage() {
   const [accountAge, setAccountAge] = useState("120");
   const [mcc, setMcc] = useState("5411");
   const [isVpn, setIsVpn] = useState(false);
+  const [forceHumanReview, setForceHumanReview] = useState(false);
   const [ipAddress, setIpAddress] = useState("103.108.140.15");
   const [terminalId, setTerminalId] = useState(
     "POS-DHAKA-GULSHAN-01",
@@ -138,6 +140,7 @@ export default function TransactionSimulatorPage() {
           amount: Number(amount),
           tx_type: Number(txType),
           account_age_days: Number(accountAge),
+          force_human_review: forceHumanReview,
           metadata: {
             stan,
             rrn,
@@ -174,13 +177,36 @@ export default function TransactionSimulatorPage() {
   const submitFeedback = async (reviewedLabel: "heavy" | "light") => {
     if (!lastTx) return;
     try {
-      await api.post("/api/v1/ai/feedback", {
-        event_uid: lastTx.event_uid,
-        reviewed_label: reviewedLabel,
-      });
-      setFeedbackMessage(`Saved human label: ${reviewedLabel}`);
+      if (lastTx.status === "pending_review") {
+        const response = await api.post<ManualTransactionResult>(
+          "/api/v1/ai/reviews/resolve",
+          {
+            event_uid: lastTx.event_uid,
+            reviewed_label: reviewedLabel,
+          },
+        );
+        setLastTx(response.data);
+        setFeedbackMessage(
+          response.data.prediction_correct
+            ? `Review confirmed ${reviewedLabel}; transaction routed.`
+            : `Review corrected the model to ${reviewedLabel}; transaction routed.`,
+        );
+      } else {
+        const response = await api.post<{ prediction_correct: boolean }>(
+          "/api/v1/ai/feedback",
+          {
+            event_uid: lastTx.event_uid,
+            reviewed_label: reviewedLabel,
+          },
+        );
+        setFeedbackMessage(
+          response.data.prediction_correct
+            ? `Saved label: ${reviewedLabel} (model confirmed).`
+            : `Saved correction: ${reviewedLabel}.`,
+        );
+      }
     } catch {
-      setFeedbackMessage("Could not save feedback.");
+      setFeedbackMessage("Could not save the human decision.");
     }
   };
 
@@ -356,6 +382,19 @@ export default function TransactionSimulatorPage() {
             </label>
           </div>
 
+          <label className="flex items-center gap-2 rounded-xl border border-amber-800 bg-amber-950/40 p-2">
+            <input
+              type="checkbox"
+              checked={forceHumanReview}
+              onChange={(event) => setForceHumanReview(event.target.checked)}
+              className="w-4 h-4 accent-amber-500"
+            />
+            <ClipboardCheck className="w-4 h-4 text-amber-400" />
+            <span className="text-amber-300 font-bold">
+              Force human review before routing
+            </span>
+          </label>
+
           {message && (
             <p className="p-2 rounded border border-amber-800 bg-amber-950/50 text-amber-300">
               {message}
@@ -417,12 +456,26 @@ export default function TransactionSimulatorPage() {
                     .join(", ")
                 : "no elevated factors"}
             </p>
-            <p className="text-[11px] mt-2 border-t border-white/10 pt-2 font-bold">
-              Actual route: {lastTx.route.node_name || "FAILED"}
-            </p>
-            <p className="text-[10px] mt-1 opacity-90">
-              {lastTx.route.reason}
-            </p>
+            {lastTx.status === "pending_review" ? (
+              <div className="mt-3 rounded border border-amber-700 bg-amber-950/60 p-2 text-amber-200">
+                <p className="font-bold">Held for human review</p>
+                <p className="mt-1 text-[10px]">
+                  No node has processed this task. Choose Heavy or Light below.
+                </p>
+                {lastTx.review_reasons.map((reason) => (
+                  <p key={reason} className="mt-1 text-[10px]">• {reason}</p>
+                ))}
+              </div>
+            ) : lastTx.route ? (
+              <>
+                <p className="text-[11px] mt-2 border-t border-white/10 pt-2 font-bold">
+                  Actual route: {lastTx.route.node_name || "FAILED"}
+                </p>
+                <p className="text-[10px] mt-1 opacity-90">
+                  {lastTx.route.reason}
+                </p>
+              </>
+            ) : null}
             {lastTx.fallback_reason && (
               <p className="text-[10px] mt-2 text-amber-300">
                 External API fallback: {lastTx.fallback_reason}

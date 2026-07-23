@@ -37,6 +37,9 @@ export interface RoutingEvent {
   classifier_source: string;
   model_name: string;
   confidence: number;
+  predicted_label?: "heavy" | "light";
+  review_required?: boolean;
+  review_reasons?: string[];
   api_used: boolean;
   fallback_reason: string | null;
   amount: number;
@@ -66,16 +69,34 @@ export interface LocalModelMetrics {
   accuracy: number;
   precision: number;
   recall: number;
+  f1: number;
+  balanced_accuracy: number;
   roc_auc: number;
+  pr_auc: number;
+  threshold: number;
+  selection_score: number;
   training_rows: number;
   validation_rows: number;
+  test_rows: number;
+  evaluation_split: string;
 }
 
 export interface LocalModelStatus {
   available: boolean;
   model_name: string;
   dataset_source: string;
+  requested_algorithm: "auto" | "random_forest" | "xgboost";
+  selected_algorithm: "random_forest" | "xgboost" | null;
+  threshold: number;
+  xgboost_available: boolean;
+  review_policy: {
+    enabled: boolean;
+    confidence_threshold: number;
+    fallbacks_require_review: boolean;
+  };
   metrics: LocalModelMetrics | null;
+  candidate_metrics: Record<string, LocalModelMetrics>;
+  artifact_path: string | null;
   error: string | null;
 }
 
@@ -95,6 +116,10 @@ export interface AIRuntimeStatus {
 export interface DatasetStatus {
   rows: number;
   reviewed_rows: number;
+  pending_reviews: number;
+  correct_predictions: number;
+  incorrect_predictions: number;
+  reviewed_accuracy: number | null;
   max_rows: number;
   auto_sample_every: number;
   storage: string;
@@ -125,14 +150,38 @@ export interface TelemetryData {
   dataset: DatasetStatus;
 }
 
+export interface PendingReview {
+  event_uid: string;
+  event_id: number;
+  created_at: string;
+  amount: number;
+  tx_type: number;
+  account_age_days: number;
+  mcc: string;
+  is_vpn: boolean;
+  predicted_label: "heavy" | "light";
+  risk_score: number;
+  risk_level: "low" | "medium" | "high";
+  task_path: string;
+  classifier_source: string;
+  model_name: string;
+  confidence: number;
+  review_reasons: string[];
+  risk_factors: RiskFactor[];
+}
+
 export interface ManualTransactionResult {
-  status: "success" | "failed";
+  status: "success" | "failed" | "pending_review";
   event_uid: string;
   event_id: number;
   strategy: "ai" | "legacy";
   is_heavy: boolean;
+  predicted_label: "heavy" | "light";
+  reviewed_label?: "heavy" | "light";
+  prediction_correct?: boolean;
   task_path: string;
   risk_score: number;
+  original_risk_score?: number;
   risk_level: "low" | "medium" | "high";
   risk_factors: RiskFactor[];
   classifier_source: string;
@@ -140,12 +189,14 @@ export interface ManualTransactionResult {
   confidence: number;
   api_used: boolean;
   fallback_reason: string | null;
-  route: RouteOutcome;
+  review_required: boolean;
+  review_reasons: string[];
+  route: RouteOutcome | null;
   comparison: {
     ai_route: RouteOutcome;
     legacy_route: RouteOutcome;
-  };
+  } | null;
   decision: string;
-  stan: string;
-  rrn: string;
+  stan: string | null;
+  rrn: string | null;
 }

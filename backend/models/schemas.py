@@ -35,10 +35,16 @@ class ManualTxRequest(BaseModel):
     amount: float = Field(gt=0, le=1_000_000)
     tx_type: Literal[0, 1, 2]
     account_age_days: int = Field(ge=0, le=36_500)
+    force_human_review: bool = False
     metadata: TransactionMetadata
 
 
 class ClassificationFeedbackRequest(BaseModel):
+    event_uid: str = Field(pattern=r"^\d+:\d+$", max_length=40)
+    reviewed_label: Literal["heavy", "light"]
+
+
+class HumanReviewDecisionRequest(BaseModel):
     event_uid: str = Field(pattern=r"^\d+:\d+$", max_length=40)
     reviewed_label: Literal["heavy", "light"]
 
