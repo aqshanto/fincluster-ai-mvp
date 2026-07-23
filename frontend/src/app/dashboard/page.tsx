@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import axios from "axios";
 import {
   AlertTriangle,
@@ -24,7 +24,7 @@ import Header from "@/components/Header";
 import NodeCard from "@/components/NodeCard";
 import SimulationCanvas from "@/components/SimulationCanvas";
 import api from "@/services/api";
-import { TelemetryData } from "@/types";
+import type { TelemetryData } from "@/types";
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -46,9 +46,12 @@ export default function DashboardPage() {
     let retryAttempt = 0;
 
     const connect = () => {
-      if (stopped) return;
+      if (stopped) {
+        return;
+      }
 
       setConnectionStatus("connecting");
+
       websocket = new WebSocket(wsUrl);
 
       websocket.onopen = () => {
@@ -58,19 +61,27 @@ export default function DashboardPage() {
 
       websocket.onmessage = (event) => {
         try {
-          setTelemetry(JSON.parse(event.data) as TelemetryData);
+          const nextTelemetry = JSON.parse(event.data) as TelemetryData;
+
+          setTelemetry(nextTelemetry);
         } catch (caught) {
           console.error("Failed to parse telemetry data:", caught);
         }
       };
 
-      websocket.onerror = () => websocket?.close();
+      websocket.onerror = () => {
+        websocket?.close();
+      };
 
       websocket.onclose = () => {
-        if (stopped) return;
+        if (stopped) {
+          return;
+        }
 
         setConnectionStatus("disconnected");
+
         const retryDelay = Math.min(1000 * 2 ** retryAttempt, 10_000);
+
         retryAttempt += 1;
         retryTimer = setTimeout(connect, retryDelay);
       };
@@ -80,7 +91,11 @@ export default function DashboardPage() {
 
     return () => {
       stopped = true;
-      if (retryTimer) clearTimeout(retryTimer);
+
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
+
       websocket?.close();
     };
   }, []);
@@ -92,7 +107,9 @@ export default function DashboardPage() {
       try {
         const response = await api.get<AIStatusBannerData>("/api/v1/ai/status");
 
-        if (!stopped) setAIStatus(response.data);
+        if (!stopped) {
+          setAIStatus(response.data);
+        }
       } catch (caught) {
         if (!stopped) {
           console.error("Failed to load AI intelligence status:", caught);
@@ -125,6 +142,7 @@ export default function DashboardPage() {
         setRecoveryError(
           "Operator login is required. Use the login button in the control bar below.",
         );
+
         return;
       }
 
@@ -136,16 +154,14 @@ export default function DashboardPage() {
 
   return (
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-[#050b18] lg:h-screen lg:overflow-hidden">
-      <div className="pointer-events-none fixed inset-0 hidden lg:block">
-        <SimulationCanvas telemetry={telemetry} />
-      </div>
-
       <Header telemetry={telemetry} connectionStatus={connectionStatus} />
 
       <AIStatusBanner
         status={aiStatus}
         onOpenDetails={() => setShowAIIntelligence(true)}
       />
+
+      <DesktopDecisionLog telemetry={telemetry} />
 
       <AIIntelligenceModal
         open={showAIIntelligence}
@@ -171,6 +187,7 @@ export default function DashboardPage() {
 
             <div className="flex items-center justify-center gap-3 rounded-lg border border-red-800 bg-red-950/90 p-3 font-mono text-xs text-red-200">
               <RefreshCw className="h-4 w-4 shrink-0 animate-spin text-red-400" />
+
               <span>
                 Self-healing cooldown is active until nodes fall below 50°C.
               </span>
@@ -208,85 +225,15 @@ export default function DashboardPage() {
       )}
 
       <main className="relative z-10 mx-auto w-full max-w-350 flex-1 px-3 py-4 sm:px-4 lg:min-h-0 lg:px-8 lg:py-3">
-        <div className="space-y-4 lg:hidden">
-          <TransactionStreamCard
-            telemetry={telemetry}
-            onOpenModel={() => setShowAIIntelligence(true)}
-          />
+        <MobileDashboard
+          telemetry={telemetry}
+          onOpenModel={() => setShowAIIntelligence(true)}
+        />
 
-          <MobileRoutingSimulation telemetry={telemetry} />
-
-          <section>
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">
-                  Live infrastructure
-                </p>
-                <h2 className="mt-1 text-lg font-bold text-white">
-                  Cluster nodes
-                </h2>
-              </div>
-              <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[10px] font-bold text-slate-400">
-                {telemetry?.active_nodes ?? "0/3"} active
-              </span>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              {telemetry?.nodes
-                ? telemetry.nodes.map((node) => (
-                    <NodeCard key={node.id} node={node} />
-                  ))
-                : [0, 1, 2].map((index) => (
-                    <div
-                      key={index}
-                      className="h-32 animate-pulse rounded-xl border border-slate-800 bg-slate-900/50"
-                    />
-                  ))}
-            </div>
-          </section>
-
-          <CostChart
-            runId={telemetry?.run_id ?? 0}
-            simTime={telemetry?.sim_time ?? "00:00:00"}
-            legacyCost={telemetry?.legacy_cost ?? 0}
-            optimizedCost={telemetry?.optimized_cost ?? 0}
-            savedCost={telemetry?.saved_cost ?? 0}
-            benchmark={telemetry?.benchmark}
-          />
-        </div>
-
-        <div className="hidden h-full min-h-0 grid-cols-[minmax(280px,350px)_minmax(260px,1fr)_minmax(260px,300px)] items-center gap-5 lg:grid">
-          <div className="max-h-full space-y-4 overflow-y-auto py-2">
-            <TransactionStreamCard
-              telemetry={telemetry}
-              onOpenModel={() => setShowAIIntelligence(true)}
-            />
-
-            <CostChart
-              runId={telemetry?.run_id ?? 0}
-              simTime={telemetry?.sim_time ?? "00:00:00"}
-              legacyCost={telemetry?.legacy_cost ?? 0}
-              optimizedCost={telemetry?.optimized_cost ?? 0}
-              savedCost={telemetry?.saved_cost ?? 0}
-              benchmark={telemetry?.benchmark}
-            />
-          </div>
-
-          <DesktopRoutingSimulation telemetry={telemetry} />
-
-          <div className="max-h-full space-y-4 overflow-y-auto py-2">
-            {telemetry?.nodes
-              ? telemetry.nodes.map((node) => (
-                  <NodeCard key={node.id} node={node} />
-                ))
-              : [0, 1, 2].map((index) => (
-                  <div
-                    key={index}
-                    className="h-28 animate-pulse rounded-xl border border-slate-800 bg-slate-900/50"
-                  />
-                ))}
-          </div>
-        </div>
+        <DesktopRoutingStage
+          telemetry={telemetry}
+          onOpenModel={() => setShowAIIntelligence(true)}
+        />
       </main>
 
       <ControlPanel
@@ -301,6 +248,147 @@ export default function DashboardPage() {
         datasetRows={telemetry?.dataset.rows ?? 0}
         pendingReviewCount={telemetry?.dataset.pending_reviews ?? 0}
       />
+    </div>
+  );
+}
+
+function DesktopDecisionLog({
+  telemetry,
+}: {
+  telemetry: TelemetryData | null;
+}) {
+  if (!telemetry?.ai_decision || telemetry.cluster_outage) {
+    return null;
+  }
+
+  return (
+    <section className="relative z-20 mx-auto hidden w-full max-w-350 px-8 pt-2 lg:block">
+      <div className="rounded-xl border border-blue-500/45 bg-blue-950/90 px-4 py-2.5 shadow-lg shadow-blue-950/30 backdrop-blur-md">
+        <div className="flex items-start gap-3">
+          <div className="relative mt-1.5 h-3 w-3 shrink-0">
+            <div className="absolute inset-0 animate-ping rounded-full bg-blue-400/50" />
+            <div className="absolute inset-0 rounded-full bg-blue-400" />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-300">
+              Decision Log
+            </p>
+
+            <p className="mt-1 max-h-16 overflow-y-auto whitespace-pre-wrap wrap-break-word pr-1 font-mono text-[11px] leading-5 text-blue-100">
+              {telemetry.ai_decision}
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MobileDashboard({
+  telemetry,
+  onOpenModel,
+}: {
+  telemetry: TelemetryData | null;
+  onOpenModel: () => void;
+}) {
+  return (
+    <div className="space-y-4 lg:hidden">
+      <TransactionStreamCard telemetry={telemetry} onOpenModel={onOpenModel} />
+
+      <MobileRoutingSimulation telemetry={telemetry} />
+
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">
+              Live infrastructure
+            </p>
+
+            <h2 className="mt-1 text-lg font-bold text-white">Cluster nodes</h2>
+          </div>
+
+          <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[10px] font-bold text-slate-400">
+            {telemetry?.active_nodes ?? "0/3"} active
+          </span>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {telemetry?.nodes
+            ? telemetry.nodes.map((node) => (
+                <NodeCard key={node.id} node={node} />
+              ))
+            : [0, 1, 2].map((index) => (
+                <div
+                  key={index}
+                  className="h-32 animate-pulse rounded-xl border border-slate-800 bg-slate-900/50"
+                />
+              ))}
+        </div>
+      </section>
+
+      <CostChart
+        runId={telemetry?.run_id ?? 0}
+        simTime={telemetry?.sim_time ?? "00:00:00"}
+        legacyCost={telemetry?.legacy_cost ?? 0}
+        optimizedCost={telemetry?.optimized_cost ?? 0}
+        savedCost={telemetry?.saved_cost ?? 0}
+        benchmark={telemetry?.benchmark}
+      />
+    </div>
+  );
+}
+
+function DesktopRoutingStage({
+  telemetry,
+  onOpenModel,
+}: {
+  telemetry: TelemetryData | null;
+  onOpenModel: () => void;
+}) {
+  return (
+    <div className="relative hidden h-full min-h-0 overflow-hidden lg:block">
+      <SimulationCanvas telemetry={telemetry} />
+
+      <div className="relative z-10 grid h-full min-h-0 grid-cols-[minmax(280px,350px)_minmax(260px,1fr)_minmax(260px,300px)] gap-5">
+        <div className="flex min-h-0 flex-col justify-center gap-4 overflow-y-auto py-2">
+          <div data-routing-source>
+            <TransactionStreamCard
+              telemetry={telemetry}
+              onOpenModel={onOpenModel}
+            />
+          </div>
+
+          <CostChart
+            runId={telemetry?.run_id ?? 0}
+            simTime={telemetry?.sim_time ?? "00:00:00"}
+            legacyCost={telemetry?.legacy_cost ?? 0}
+            optimizedCost={telemetry?.optimized_cost ?? 0}
+            savedCost={telemetry?.saved_cost ?? 0}
+            benchmark={telemetry?.benchmark}
+          />
+        </div>
+
+        <DesktopRoutingSimulation telemetry={telemetry} />
+
+        <div className="flex min-h-0 flex-col justify-center gap-4 overflow-y-auto py-2">
+          {telemetry?.nodes
+            ? telemetry.nodes.map((node, index) => (
+                <div
+                  key={node.id}
+                  data-routing-node={index}
+                  className="shrink-0"
+                >
+                  <NodeCard node={node} />
+                </div>
+              ))
+            : [0, 1, 2].map((index) => (
+                <div key={index} data-routing-node={index} className="shrink-0">
+                  <div className="h-28 animate-pulse rounded-xl border border-slate-800 bg-slate-900/50" />
+                </div>
+              ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -324,6 +412,7 @@ function TransactionStreamCard({
           type="button"
           onClick={onOpenModel}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-1.5 text-[10px] font-bold text-blue-300 transition hover:border-blue-400 hover:bg-blue-500/20 hover:text-white"
+          aria-label="Open AI model intelligence"
         >
           <BrainCircuit className="h-3.5 w-3.5" />
           AI Model
@@ -341,6 +430,7 @@ function TransactionStreamCard({
           detail="Deep fraud / enhanced verification"
           value={telemetry?.total_heavy ?? 0}
         />
+
         <TaskCount
           color="blue"
           label="Light Tasks"
@@ -366,6 +456,7 @@ function MobileRoutingSimulation({
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">
             Live routing simulation
           </p>
+
           <h2 className="mt-1 text-lg font-bold text-white">
             {aiEnabled ? "AI Scheduler" : "Legacy Round-Robin"}
           </h2>
@@ -412,6 +503,7 @@ function MobileRoutingSimulation({
         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-300">
           Latest decision
         </p>
+
         <p className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap wrap-break-word font-mono text-[11px] leading-5 text-slate-300">
           {telemetry?.ai_decision ||
             "Waiting for the next transaction decision..."}
@@ -429,28 +521,9 @@ function DesktopRoutingSimulation({
   const aiEnabled = telemetry?.ai_enabled ?? true;
 
   return (
-    <div className="pointer-events-auto flex min-w-0 flex-col items-center justify-center px-3">
-      {telemetry?.ai_decision && !telemetry.cluster_outage && (
-        <div className="mb-5 w-full max-w-2xl rounded-xl border border-blue-500/50 bg-blue-950/95 p-3 shadow-2xl backdrop-blur-md">
-          <div className="flex items-start gap-3">
-            <div className="relative mt-1.5 h-3 w-3 shrink-0">
-              <div className="absolute inset-0 animate-ping rounded-full bg-blue-400/50" />
-              <div className="absolute inset-0 rounded-full bg-blue-400" />
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-300">
-                Decision Log
-              </p>
-              <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap wrap-break-word pr-1 font-mono text-[11px] leading-5 text-blue-100">
-                {telemetry.ai_decision}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
+    <div className="pointer-events-auto relative z-10 flex h-full min-h-90 min-w-0 flex-col items-center justify-center">
       <div
+        data-routing-center
         className={`flex h-20 w-20 items-center justify-center rounded-full border-2 bg-slate-900 shadow-2xl transition-all duration-300 ${
           aiEnabled
             ? "scale-105 border-blue-500 shadow-blue-500/50"
@@ -464,7 +537,7 @@ function DesktopRoutingSimulation({
         />
       </div>
 
-      <div className="glass-panel mt-5 rounded-lg border border-slate-700 px-4 py-2 text-center shadow-xl">
+      <div className="glass-panel mt-5 rounded-lg border border-slate-700 px-5 py-2.5 text-center shadow-xl">
         <p
           className={`text-sm font-bold tracking-widest ${
             aiEnabled ? "text-blue-400" : "text-slate-400"
@@ -472,6 +545,7 @@ function DesktopRoutingSimulation({
         >
           {aiEnabled ? "AI LIVE VIEW" : "LEGACY LIVE VIEW"}
         </p>
+
         <p className="mt-0.5 text-xs text-slate-400">
           Both strategies process the same workload
         </p>
@@ -487,7 +561,7 @@ function FlowNode({
   active = false,
   full = false,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   note: string;
   active?: boolean;
@@ -503,8 +577,10 @@ function FlowNode({
     >
       <div className="flex items-center gap-2 text-blue-300">
         {icon}
+
         <p className="truncate text-xs font-bold text-white">{title}</p>
       </div>
+
       <p className="mt-1 text-[10px] leading-4 text-slate-500">{note}</p>
     </div>
   );
@@ -532,8 +608,10 @@ function TaskCount({
     <div className="flex items-center justify-between">
       <div className="flex min-w-0 items-center">
         <span className={`mr-3 h-3 w-3 shrink-0 rounded-full ${dotClass}`} />
+
         <div className="min-w-0">
           <p className="text-sm leading-tight text-slate-200">{label}</p>
+
           <p className="truncate text-[10px] text-slate-500">{detail}</p>
         </div>
       </div>

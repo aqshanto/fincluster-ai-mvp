@@ -34,8 +34,6 @@ export default function Header({ telemetry, connectionStatus }: HeaderProps) {
             </h1>
 
             <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-400 sm:text-xs">
-              <span>Phase 1 MVP</span>
-              <span className="text-slate-700">|</span>
               <span>Team DIU_Gurte_Aisi</span>
               <span className="inline-flex items-center gap-1 font-mono uppercase">
                 <span className={`h-2 w-2 rounded-full ${connectionClass}`} />

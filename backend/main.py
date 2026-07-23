@@ -44,6 +44,28 @@ from models.schemas import (
 logger = logging.getLogger("fincluster")
 
 
+def _float_environment_value(
+    name: str,
+    default: float,
+    *,
+    minimum: float,
+) -> float:
+    raw_value = os.getenv(name, str(default))
+
+    try:
+        parsed_value = float(raw_value)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid value for %s=%r. Falling back to %.2f.",
+            name,
+            raw_value,
+            default,
+        )
+        return default
+
+    return max(minimum, parsed_value)
+
+
 def _cors_origins() -> list[str]:
     configured = os.getenv(
         "CORS_ORIGINS",
@@ -61,6 +83,16 @@ def _cors_origins() -> list[str]:
 
 CORS_ORIGINS = _cors_origins()
 
+# The simulation continues to advance every 100 milliseconds.
+# Telemetry is sent less frequently to reduce Render WebSocket bandwidth.
+SIMULATION_TICK_SECONDS = 0.1
+
+TELEMETRY_BROADCAST_INTERVAL_SECONDS = _float_environment_value(
+    "TELEMETRY_BROADCAST_INTERVAL_SECONDS",
+    1.0,
+    minimum=0.5,
+)
+
 
 class TelemetryConnectionManager:
     def __init__(self) -> None:
@@ -76,7 +108,10 @@ class TelemetryConnectionManager:
         self.connections.discard(websocket)
 
     @staticmethod
-    async def _send(websocket: WebSocket, payload: dict) -> bool:
+    async def _send(
+        websocket: WebSocket,
+        payload: dict,
+    ) -> bool:
         try:
             await asyncio.wait_for(
                 websocket.send_json(payload),
@@ -93,7 +128,10 @@ class TelemetryConnectionManager:
             return
 
         results = await asyncio.gather(
-            *(self._send(websocket, payload) for websocket in connections),
+            *(
+                self._send(websocket, payload)
+                for websocket in connections
+            ),
             return_exceptions=False,
         )
 
@@ -111,15 +149,57 @@ simulation_lock = asyncio.Lock()
 
 
 async def simulation_loop() -> None:
-    """The only code path that advances global simulation time."""
+    """
+    Advance the simulation frequently while limiting WebSocket traffic.
+
+    The simulator still updates every 100 milliseconds, preserving its
+    internal behavior and animation timing. Full telemetry snapshots are
+    broadcast at a configurable lower frequency, once per second by default.
+    """
+
+    event_loop = asyncio.get_running_loop()
+
+    next_broadcast_at = (
+        event_loop.time()
+        + TELEMETRY_BROADCAST_INTERVAL_SECONDS
+    )
 
     while True:
-        try:
-            async with simulation_lock:
-                orchestrator.update_simulation(100.0)
-                snapshot = orchestrator.get_telemetry()
+        tick_started_at = event_loop.time()
 
-            await manager.broadcast(snapshot)
+        try:
+            snapshot: dict | None = None
+            current_time = event_loop.time()
+
+            # When nobody is connected, avoid building telemetry snapshots
+            # and keep the next broadcast scheduled after a future client
+            # connects.
+            if not manager.connections:
+                next_broadcast_at = (
+                    current_time
+                    + TELEMETRY_BROADCAST_INTERVAL_SECONDS
+                )
+
+            should_broadcast = (
+                bool(manager.connections)
+                and current_time >= next_broadcast_at
+            )
+
+            async with simulation_lock:
+                orchestrator.update_simulation(
+                    SIMULATION_TICK_SECONDS * 1000.0
+                )
+
+                if should_broadcast:
+                    snapshot = orchestrator.get_telemetry()
+
+            if snapshot is not None:
+                await manager.broadcast(snapshot)
+
+                next_broadcast_at = (
+                    event_loop.time()
+                    + TELEMETRY_BROADCAST_INTERVAL_SECONDS
+                )
 
         except asyncio.CancelledError:
             raise
@@ -127,7 +207,14 @@ async def simulation_loop() -> None:
         except Exception:
             logger.exception("Simulation tick failed")
 
-        await asyncio.sleep(0.1)
+        tick_elapsed = event_loop.time() - tick_started_at
+
+        await asyncio.sleep(
+            max(
+                0.0,
+                SIMULATION_TICK_SECONDS - tick_elapsed,
+            )
+        )
 
 
 @asynccontextmanager
@@ -512,6 +599,8 @@ async def websocket_telemetry(
     await manager.accept(websocket)
 
     try:
+        # Send one snapshot immediately so newly connected dashboards do not
+        # need to wait for the next scheduled telemetry broadcast.
         async with simulation_lock:
             snapshot = orchestrator.get_telemetry()
 
@@ -526,4 +615,6 @@ async def websocket_telemetry(
 
     except Exception:
         manager.disconnect(websocket)
-        logger.exception("Unexpected WebSocket telemetry error")
+        logger.exception(
+            "Unexpected WebSocket telemetry error"
+        )
