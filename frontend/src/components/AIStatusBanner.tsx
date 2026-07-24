@@ -32,6 +32,7 @@ export interface AIStatusBannerData {
     training?: boolean;
     reviewed_rows?: number;
     min_reviewed?: number;
+    next_retrain_at?: number;
   };
 }
 
@@ -70,7 +71,8 @@ export default function AIStatusBanner({
   const accuracy = formatAccuracy(localModel?.metrics?.accuracy);
   const datasetRows = dataset?.rows ?? 0;
   const reviewedRows = retraining?.reviewed_rows ?? dataset?.reviewed_rows ?? 0;
-  const minimumReviews = retraining?.min_reviewed ?? 100;
+  const nextRetrainAt =
+    retraining?.next_retrain_at ?? retraining?.min_reviewed ?? 100;
   const reviewEnabled = localModel?.review_policy?.enabled === true;
   const modelName = localModel?.model_name ?? "Waiting for local model status";
 
@@ -107,7 +109,7 @@ export default function AIStatusBanner({
             </div>
 
             <p className="mt-1 text-xs text-slate-400">
-              {accuracy} held-out accuracy · {reviewedRows}/{minimumReviews}{" "}
+              {accuracy} model accuracy · {reviewedRows}/{nextRetrainAt}{" "}
               reviewed
             </p>
           </div>
@@ -170,7 +172,7 @@ export default function AIStatusBanner({
             value={
               retraining?.training
                 ? "Training"
-                : `${reviewedRows}/${minimumReviews}`
+                : `${reviewedRows}/${nextRetrainAt}`
             }
           />
         </div>

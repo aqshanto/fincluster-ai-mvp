@@ -133,6 +133,29 @@ class LocalTransactionClassifier:
         """Hot-load a validated reviewed-data artifact."""
         self._load_artifact(path)
 
+    def reset_to_synthetic(self) -> None:
+        """Restore the original seeded champion for a fresh learning demo."""
+
+        if not ml_dependencies_available() or joblib is None:
+            raise RuntimeError("Local ML dependencies are unavailable")
+
+        with self._model_lock:
+            self.available = True
+            self.model = None
+            self.metrics = None
+            self.candidate_metrics = {}
+            self.error = None
+            self.model_name = self.MODEL_NAME
+            self.dataset_source = self.DATASET_SOURCE
+            self.threshold = self.DEFAULT_THRESHOLD
+            self.selected_algorithm = None
+
+        self._train()
+        with self._model_lock:
+            self.dataset_source = self.DATASET_SOURCE
+            self.available = True
+            self.error = None
+
     @staticmethod
     def _vectorize(
         *, amount: float, tx_type: int, account_age_days: int, mcc: str, is_vpn: bool

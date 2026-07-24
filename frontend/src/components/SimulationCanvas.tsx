@@ -17,8 +17,6 @@ interface RoutingLayout {
   source: Point;
   center: Point;
   targets: Point[];
-  width: number;
-  height: number;
 }
 
 interface Particle {
@@ -36,7 +34,9 @@ interface Particle {
   targetNodeIdx: number;
 }
 
-export default function SimulationCanvas({ telemetry }: SimulationCanvasProps) {
+export default function SimulationCanvas({
+  telemetry,
+}: SimulationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const particlesRef = useRef<Particle[]>([]);
   const nodesRef = useRef<NodeStatus[]>([]);
@@ -47,9 +47,7 @@ export default function SimulationCanvas({ telemetry }: SimulationCanvasProps) {
   const runIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!telemetry) {
-      return;
-    }
+    if (!telemetry) return;
 
     nodesRef.current = telemetry.nodes;
     outageRef.current = telemetry.cluster_outage;
@@ -66,21 +64,20 @@ export default function SimulationCanvas({ telemetry }: SimulationCanvasProps) {
     }
 
     const layout = layoutRef.current;
-
-    if (!layout) {
-      return;
-    }
+    if (!layout) return;
 
     const unseenEvents = telemetry.routing_events.filter(
       (event) => event.event_id > seenEventRef.current,
     );
-
-    if (unseenEvents.length === 0) {
-      return;
-    }
+    if (unseenEvents.length === 0) return;
 
     for (const event of unseenEvents.slice(-12)) {
-      spawnParticle(event, telemetry.ai_enabled, layout, particlesRef.current);
+      spawnParticle(
+        event,
+        telemetry.ai_enabled,
+        layout,
+        particlesRef.current,
+      );
     }
 
     seenEventRef.current = Math.max(
@@ -96,48 +93,28 @@ export default function SimulationCanvas({ telemetry }: SimulationCanvasProps) {
     };
 
     window.addEventListener("force_reset_ui", handleInstantReset);
-
-    return () => {
-      window.removeEventListener("force_reset_ui", handleInstantReset);
-    };
+    return () => window.removeEventListener("force_reset_ui", handleInstantReset);
   }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = canvas?.parentElement;
-
-    if (!canvas || !container) {
-      return;
-    }
+    if (!canvas || !container) return;
 
     const updateLayout = () => {
       const canvasRect = canvas.getBoundingClientRect();
       const width = Math.max(1, canvasRect.width);
       const height = Math.max(1, canvasRect.height);
-
       const devicePixelRatio = Math.min(window.devicePixelRatio || 1, 2);
 
-      const nextCanvasWidth = Math.round(width * devicePixelRatio);
-      const nextCanvasHeight = Math.round(height * devicePixelRatio);
-
-      if (
-        canvas.width !== nextCanvasWidth ||
-        canvas.height !== nextCanvasHeight
-      ) {
-        canvas.width = nextCanvasWidth;
-        canvas.height = nextCanvasHeight;
-      }
-
+      canvas.width = Math.round(width * devicePixelRatio);
+      canvas.height = Math.round(height * devicePixelRatio);
       devicePixelRatioRef.current = devicePixelRatio;
 
-      const sourceElement = container.querySelector<HTMLElement>(
-        "[data-routing-source]",
-      );
-
-      const centerElement = container.querySelector<HTMLElement>(
-        "[data-routing-center]",
-      );
-
+      const sourceElement =
+        container.querySelector<HTMLElement>("[data-routing-source]");
+      const centerElement =
+        container.querySelector<HTMLElement>("[data-routing-center]");
       const nodeElements = Array.from(
         container.querySelectorAll<HTMLElement>("[data-routing-node]"),
       ).sort(
@@ -154,15 +131,6 @@ export default function SimulationCanvas({ telemetry }: SimulationCanvasProps) {
       const sourceRect = sourceElement.getBoundingClientRect();
       const centerRect = centerElement.getBoundingClientRect();
 
-      const targets = nodeElements.map((element) => {
-        const nodeRect = element.getBoundingClientRect();
-
-        return {
-          x: nodeRect.left - canvasRect.left,
-          y: nodeRect.top + nodeRect.height / 2 - canvasRect.top,
-        };
-      });
-
       layoutRef.current = {
         source: {
           x: sourceRect.right - canvasRect.left,
@@ -172,31 +140,30 @@ export default function SimulationCanvas({ telemetry }: SimulationCanvasProps) {
           x: centerRect.left + centerRect.width / 2 - canvasRect.left,
           y: centerRect.top + centerRect.height / 2 - canvasRect.top,
         },
-        targets,
-        width,
-        height,
+        targets: nodeElements.map((element) => {
+          const nodeRect = element.getBoundingClientRect();
+          return {
+            x: nodeRect.left - canvasRect.left,
+            y: nodeRect.top + nodeRect.height / 2 - canvasRect.top,
+          };
+        }),
       };
     };
 
     const resizeObserver = new ResizeObserver(updateLayout);
-
     resizeObserver.observe(container);
+    container
+      .querySelectorAll<HTMLElement>(
+        "[data-routing-source], [data-routing-center], [data-routing-node]",
+      )
+      .forEach((element) => resizeObserver.observe(element));
 
-    const observedElements = container.querySelectorAll<HTMLElement>(
-      "[data-routing-source], [data-routing-center], [data-routing-node]",
-    );
-
-    observedElements.forEach((element) => {
-      resizeObserver.observe(element);
-    });
-
-    const firstLayoutFrame = window.requestAnimationFrame(updateLayout);
-
+    const initialFrame = window.requestAnimationFrame(updateLayout);
     window.addEventListener("resize", updateLayout);
     container.addEventListener("scroll", updateLayout, true);
 
     return () => {
-      window.cancelAnimationFrame(firstLayoutFrame);
+      window.cancelAnimationFrame(initialFrame);
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateLayout);
       container.removeEventListener("scroll", updateLayout, true);
@@ -205,106 +172,88 @@ export default function SimulationCanvas({ telemetry }: SimulationCanvasProps) {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-
-    if (!canvas) {
-      return;
-    }
-
+    if (!canvas) return;
     const context = canvas.getContext("2d");
-
-    if (!context) {
-      return;
-    }
+    if (!context) return;
 
     let animationFrameId = 0;
 
     const render = () => {
       const layout = layoutRef.current;
-      const devicePixelRatio = devicePixelRatioRef.current;
+      const ratio = devicePixelRatioRef.current;
 
       context.setTransform(1, 0, 0, 1, 0, 0);
       context.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (!layout) {
-        animationFrameId = window.requestAnimationFrame(render);
-        return;
-      }
+      if (layout) {
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        drawConnection(
+          context,
+          layout.source,
+          layout.center,
+          "rgba(51, 65, 85, 0.55)",
+        );
+        layout.targets.forEach((target, index) => {
+          drawConnection(
+            context,
+            layout.center,
+            target,
+            nodesRef.current[index]?.status === "crashed"
+              ? "rgba(239, 68, 68, 0.4)"
+              : "rgba(51, 65, 85, 0.55)",
+          );
+        });
 
-      context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        if (!outageRef.current) {
+          for (
+            let index = particlesRef.current.length - 1;
+            index >= 0;
+            index -= 1
+          ) {
+            const particle = particlesRef.current[index];
+            particle.progress += particle.speed;
 
-      drawConnection(
-        context,
-        layout.source,
-        layout.center,
-        "rgba(51, 65, 85, 0.55)",
-      );
-
-      layout.targets.forEach((target, index) => {
-        const strokeColor =
-          nodesRef.current[index]?.status === "crashed"
-            ? "rgba(239, 68, 68, 0.4)"
-            : "rgba(51, 65, 85, 0.55)";
-
-        drawConnection(context, layout.center, target, strokeColor);
-      });
-
-      if (!outageRef.current) {
-        for (
-          let index = particlesRef.current.length - 1;
-          index >= 0;
-          index -= 1
-        ) {
-          const particle = particlesRef.current[index];
-
-          particle.progress += particle.speed;
-
-          if (particle.progress >= 1) {
-            if (particle.stage === 1) {
-              const target = layout.targets[particle.targetNodeIdx];
-
-              if (!target) {
+            if (particle.progress >= 1) {
+              if (particle.stage === 1) {
+                const target = layout.targets[particle.targetNodeIdx];
+                if (!target) {
+                  particlesRef.current.splice(index, 1);
+                  continue;
+                }
+                particle.stage = 2;
+                particle.progress = 0;
+                particle.startX = layout.center.x;
+                particle.startY = layout.center.y;
+                particle.targetX = target.x;
+                particle.targetY = target.y;
+              } else {
                 particlesRef.current.splice(index, 1);
                 continue;
               }
-
-              particle.stage = 2;
-              particle.progress = 0;
-              particle.startX = layout.center.x;
-              particle.startY = layout.center.y;
-              particle.targetX = target.x;
-              particle.targetY = target.y;
-            } else {
-              particlesRef.current.splice(index, 1);
-              continue;
             }
+
+            particle.x =
+              particle.startX +
+              (particle.targetX - particle.startX) * particle.progress;
+            particle.y =
+              particle.startY +
+              (particle.targetY - particle.startY) * particle.progress;
+
+            context.beginPath();
+            context.arc(
+              particle.x,
+              particle.y,
+              particle.type === "heavy" ? 5 : 4,
+              0,
+              Math.PI * 2,
+            );
+            context.fillStyle =
+              particle.type === "heavy" ? "#ef4444" : "#3b82f6";
+            context.shadowColor = context.fillStyle;
+            context.shadowBlur = 12;
+            context.fill();
+            context.shadowBlur = 0;
           }
-
-          particle.x =
-            particle.startX +
-            (particle.targetX - particle.startX) * particle.progress;
-
-          particle.y =
-            particle.startY +
-            (particle.targetY - particle.startY) * particle.progress;
-
-          context.beginPath();
-
-          context.arc(
-            particle.x,
-            particle.y,
-            particle.type === "heavy" ? 5 : 4,
-            0,
-            Math.PI * 2,
-          );
-
-          context.fillStyle = particle.type === "heavy" ? "#ef4444" : "#3b82f6";
-
-          context.shadowColor =
-            particle.type === "heavy" ? "#ef4444" : "#3b82f6";
-
-          context.shadowBlur = 12;
-          context.fill();
-          context.shadowBlur = 0;
         }
       }
 
@@ -312,10 +261,7 @@ export default function SimulationCanvas({ telemetry }: SimulationCanvasProps) {
     };
 
     render();
-
-    return () => {
-      window.cancelAnimationFrame(animationFrameId);
-    };
+    return () => window.cancelAnimationFrame(animationFrameId);
   }, []);
 
   return (
@@ -349,12 +295,7 @@ function spawnParticle(
   particles: Particle[],
 ) {
   const route = aiEnabled ? event.ai_route : event.legacy_route;
-
-  if (
-    !route.success ||
-    route.node_id === null ||
-    !layout.targets[route.node_id]
-  ) {
+  if (!route.success || route.node_id === null || !layout.targets[route.node_id]) {
     return;
   }
 

@@ -230,23 +230,31 @@ class MFSOrchestrator:
         metrics: StrategyMetrics,
         sim_dt_hours: float,
     ) -> None:
+        idle_temperatures = (35.0, 31.0, 27.0)
+
         for index, node in enumerate(nodes):
             if node.load > 0:
                 node.load = max(0.0, node.load - self.SERVICE_DECAY_PER_TICK)
 
             # Crashed nodes cool regardless of whether the anomaly toggle is still on.
             if node.status == "crashed":
-                node.temp = max(25.0, node.temp - 0.8)
+                node.temp = max(idle_temperatures[index], node.temp - 0.55)
                 if node.temp < 50.0:
                     node.status = "standby" if index == 2 and strategy == "ai" else "healthy"
                 continue
 
-            if index == 0 and self.anomaly_active:
-                node.temp += 0.5
-            elif node.load > 75:
-                node.temp += 0.15
-            elif node.temp > 25:
-                node.temp = max(25.0, node.temp - 0.2)
+            # A load-dependent target temperature gives visible, realistic thermal
+            # telemetry at ordinary utilization. The previous implementation only
+            # heated above 75% CPU, causing every card to settle at exactly 25°C.
+            target_temp = idle_temperatures[index] + node.load * (0.30 if index == 0 else 0.24)
+            anomaly_heating = index == 0 and self.anomaly_active
+            if anomaly_heating:
+                target_temp += 72.0
+
+            temperature_change = (target_temp - node.temp) * 0.07
+            max_heating = 0.9 if anomaly_heating else 0.45
+            temperature_change = max(-0.45, min(max_heating, temperature_change))
+            node.temp = max(idle_temperatures[index], node.temp + temperature_change)
 
             if node.temp > 95:
                 node.status = "crashed"

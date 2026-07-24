@@ -1,0 +1,101 @@
+event_uid,amount,tx_type,account_age_days,mcc,is_vpn,predicted_label,model_probability,model_confidence,risk_score,risk_level,task_path,reviewed_label,reviewed_by,reviewed_at,review_note
+DEMO-000201,4376.11,0,0,7995,true,heavy,0.6689,0.3377,66.9,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low amount with masked gambling merchant pattern requires deep checks
+DEMO-000202,21548.74,2,2583,5411,false,light,0.2576,0.4849,25.8,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,High amount from a mature account remains a light merchant-payment path
+DEMO-000203,61603.94,0,2,7995,true,heavy,0.8483,0.6965,84.8,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000204,18926.96,1,45,5411,true,heavy,0.6607,0.3215,66.1,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Cashout interaction pattern was corrected by human reviewers
+DEMO-000205,5776.46,0,328,4814,false,light,0.3544,0.2912,35.4,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Normal transfer with no elevated factors remains light
+DEMO-000206,38425.07,0,52,7995,true,heavy,0.8305,0.6611,83.1,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000207,7083.87,0,2081,4814,false,light,0.086,0.828,8.6,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000208,1751.14,0,1346,5411,false,light,0.1459,0.7083,14.6,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000209,23425.8,2,1237,5411,false,light,0.4267,0.1466,42.7,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,High amount from a mature account remains a light merchant-payment path
+DEMO-000210,3214.23,0,979,4814,false,light,0.0388,0.9224,3.9,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000211,85537.45,1,20,7995,true,heavy,0.8594,0.7188,85.9,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000212,46547.88,0,1762,6011,false,heavy,0.779,0.558,77.9,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-value transfer requires enhanced processing despite established account
+DEMO-000213,2036.03,1,1071,5411,false,heavy,0.2377,0.5246,23.8,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Human reviewer corrected the original model. Small cashout from an established account is confirmed light
+DEMO-000214,45870.06,0,1438,6011,false,heavy,0.721,0.442,72.1,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-value transfer requires enhanced processing despite established account
+DEMO-000215,676.26,2,1421,5411,false,light,0.1875,0.6251,18.7,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000216,2292.59,1,1559,5411,false,light,0.2557,0.4886,25.6,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Small cashout from an established account is confirmed light
+DEMO-000217,15032.16,1,13,6011,true,heavy,0.7247,0.4494,72.5,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,"Moderate amount but new account, cashout, and VPN require heavy review"
+DEMO-000218,29984.75,2,2617,5411,false,light,0.3045,0.3909,30.5,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,High amount from a mature account remains a light merchant-payment path
+DEMO-000219,14029.98,1,71,5411,true,heavy,0.7271,0.4541,72.7,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Cashout interaction pattern was corrected by human reviewers
+DEMO-000220,3749.85,0,400,4814,false,light,0.3425,0.3151,34.2,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Normal transfer with no elevated factors remains light
+DEMO-000221,283.56,0,681,5411,false,light,0.0538,0.8924,5.4,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000222,94245.84,1,6,7995,true,heavy,0.9553,0.9106,95.5,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000223,21504.36,1,43,5411,true,heavy,0.6056,0.2111,60.6,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Cashout interaction pattern was corrected by human reviewers
+DEMO-000224,3214.67,0,5,7995,true,heavy,0.6949,0.3899,69.5,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low amount with masked gambling merchant pattern requires deep checks
+DEMO-000225,34900.8,0,621,6011,false,heavy,0.7532,0.5064,75.3,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-value transfer requires enhanced processing despite established account
+DEMO-000226,5098.55,0,1747,5411,false,light,0.0377,0.9247,3.8,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000227,1248.93,2,33,5411,false,light,0.2259,0.5483,22.6,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Young account alone does not require heavy processing
+DEMO-000228,5851.43,0,1027,5411,false,light,0.1307,0.7387,13.1,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000229,7006.84,2,1450,4814,false,light,0.0489,0.9021,4.9,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000230,91043.23,0,14,6011,true,heavy,0.8201,0.6402,82.0,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000231,62255.76,1,46,7995,false,heavy,0.9425,0.8849,94.2,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000232,8004.85,0,106,4814,false,light,0.3357,0.3286,33.6,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Normal transfer with no elevated factors remains light
+DEMO-000233,2149.92,0,2472,4814,false,light,0.0304,0.9392,3.0,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000234,50053.46,1,53,7995,true,heavy,0.7852,0.5703,78.5,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000235,44794.62,1,1,7995,true,heavy,0.931,0.862,93.1,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000236,926.32,1,887,5411,false,light,0.2736,0.4529,27.4,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Small cashout from an established account is confirmed light
+DEMO-000237,56146.54,0,39,6011,true,heavy,0.8325,0.6651,83.3,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000238,88529.04,0,42,6011,false,heavy,0.8234,0.6467,82.3,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000239,27782.05,2,931,5411,false,light,0.2424,0.5152,24.2,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,High amount from a mature account remains a light merchant-payment path
+DEMO-000240,4215.67,0,787,5411,false,light,0.1972,0.6056,19.7,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000241,616.37,2,39,5411,false,light,0.2942,0.4116,29.4,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Young account alone does not require heavy processing
+DEMO-000242,49459.5,0,1647,6011,false,heavy,0.5962,0.1924,59.6,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-value transfer requires enhanced processing despite established account
+DEMO-000243,50081.11,0,51,7995,true,heavy,0.8165,0.633,81.6,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000244,35660.95,2,1912,5411,false,light,0.3022,0.3956,30.2,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,High amount from a mature account remains a light merchant-payment path
+DEMO-000245,34373.97,2,1262,5411,false,light,0.3394,0.3212,33.9,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,High amount from a mature account remains a light merchant-payment path
+DEMO-000246,1142.03,0,2342,4814,false,light,0.112,0.776,11.2,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000247,14051.54,1,11,6011,true,heavy,0.6284,0.2567,62.8,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,"Moderate amount but new account, cashout, and VPN require heavy review"
+DEMO-000248,1390.77,2,12,5411,false,light,0.2664,0.4671,26.6,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Young account alone does not require heavy processing
+DEMO-000249,14670.45,1,6,6011,true,heavy,0.7185,0.437,71.9,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,"Moderate amount but new account, cashout, and VPN require heavy review"
+DEMO-000250,7385.4,0,390,4814,false,light,0.3821,0.2357,38.2,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Normal transfer with no elevated factors remains light
+DEMO-000251,7967.34,0,136,4814,false,light,0.4675,0.0651,46.7,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Normal transfer with no elevated factors remains light
+DEMO-000252,90624.81,1,15,6011,true,heavy,0.7926,0.5851,79.3,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000253,14162.54,1,14,6011,true,heavy,0.6005,0.201,60.1,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,"Moderate amount but new account, cashout, and VPN require heavy review"
+DEMO-000254,7236.13,2,2385,4814,false,light,0.1075,0.7849,10.8,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000255,5191.74,2,1689,5411,false,light,0.1828,0.6345,18.3,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000256,3827.24,0,6,7995,true,heavy,0.6369,0.2738,63.7,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low amount with masked gambling merchant pattern requires deep checks
+DEMO-000257,8268.52,1,10,6011,true,heavy,0.7098,0.4196,71.0,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,"Moderate amount but new account, cashout, and VPN require heavy review"
+DEMO-000258,1287.17,1,973,5411,false,heavy,0.3081,0.3838,30.8,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Human reviewer corrected the original model. Small cashout from an established account is confirmed light
+DEMO-000259,5025.44,0,3,7995,true,heavy,0.6105,0.2211,61.1,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low amount with masked gambling merchant pattern requires deep checks
+DEMO-000260,22855.32,1,40,5411,true,heavy,0.7277,0.4554,72.8,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Cashout interaction pattern was corrected by human reviewers
+DEMO-000261,2465.84,1,531,5411,false,light,0.4229,0.1543,42.3,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Small cashout from an established account is confirmed light
+DEMO-000262,5748.88,2,2277,5411,false,light,0.1771,0.6458,17.7,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000263,14902.47,1,48,5411,true,heavy,0.7706,0.5411,77.1,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Cashout interaction pattern was corrected by human reviewers
+DEMO-000264,24586.3,0,469,6011,false,heavy,0.6061,0.2122,60.6,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-value transfer requires enhanced processing despite established account
+DEMO-000265,902.28,1,1377,5411,false,light,0.2588,0.4824,25.9,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Small cashout from an established account is confirmed light
+DEMO-000266,25088.98,1,107,5411,true,heavy,0.6056,0.2111,60.6,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Cashout interaction pattern was corrected by human reviewers
+DEMO-000267,7439.35,2,2422,4814,false,light,0.1649,0.6701,16.5,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000268,3541.1,2,573,5411,false,light,0.172,0.656,17.2,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000269,38692.76,2,1953,5411,false,light,0.3129,0.3742,31.3,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,High amount from a mature account remains a light merchant-payment path
+DEMO-000270,5067.79,2,1227,5411,false,light,0.2153,0.5695,21.5,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000271,75949.37,1,10,7995,true,heavy,0.8078,0.6155,80.8,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000272,5312.78,2,1047,5411,false,light,0.1767,0.6465,17.7,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000273,75997.53,1,6,7995,false,heavy,0.8407,0.6815,84.1,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000274,7358.15,2,581,5411,false,light,0.1061,0.7877,10.6,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000275,6357.11,0,1846,5411,false,light,0.2279,0.5442,22.8,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000276,17770.98,1,26,5411,true,heavy,0.6781,0.3561,67.8,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Cashout interaction pattern was corrected by human reviewers
+DEMO-000277,4137.5,0,1263,5411,false,light,0.2085,0.5829,20.9,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000278,15749.47,1,4,6011,true,heavy,0.7108,0.4216,71.1,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,"Moderate amount but new account, cashout, and VPN require heavy review"
+DEMO-000279,3203.44,2,2217,4814,false,light,0.2227,0.5546,22.3,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000280,63742.56,0,11,7995,true,heavy,0.8669,0.7339,86.7,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000281,71259.61,0,35,7995,true,heavy,0.872,0.7441,87.2,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000282,85663.66,1,47,7995,true,heavy,0.8156,0.6312,81.6,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000283,16840.61,1,9,6011,true,light,0.6073,0.2145,60.7,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,"Human reviewer corrected the original model. Moderate amount but new account, cashout, and VPN require heavy review"
+DEMO-000284,1261.4,1,1500,5411,false,light,0.425,0.1499,42.5,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Small cashout from an established account is confirmed light
+DEMO-000285,2631.51,0,7,7995,true,heavy,0.6456,0.2913,64.6,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low amount with masked gambling merchant pattern requires deep checks
+DEMO-000286,14881.51,1,8,6011,true,heavy,0.6715,0.343,67.2,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,"Moderate amount but new account, cashout, and VPN require heavy review"
+DEMO-000287,17520.87,1,2,6011,true,heavy,0.6534,0.3068,65.3,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,"Moderate amount but new account, cashout, and VPN require heavy review"
+DEMO-000288,65466.83,0,45,7995,false,heavy,0.9222,0.8444,92.2,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000289,6442.73,2,545,5411,false,heavy,0.1675,0.665,16.7,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Human reviewer corrected the original model. Low-complexity trusted transaction suitable for the fast path
+DEMO-000290,40287.74,1,54,6011,true,heavy,0.8523,0.7045,85.2,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000291,3253.55,0,2,7995,true,heavy,0.7319,0.4638,73.2,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low amount with masked gambling merchant pattern requires deep checks
+DEMO-000292,11140.24,1,13,6011,true,heavy,0.6508,0.3017,65.1,medium,ENHANCED VERIFICATION,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,"Moderate amount but new account, cashout, and VPN require heavy review"
+DEMO-000293,5511.57,0,121,4814,false,light,0.3007,0.3986,30.1,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Normal transfer with no elevated factors remains light
+DEMO-000294,30958.73,1,8,6011,false,heavy,0.9113,0.8225,91.1,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000295,30235.02,1,38,7995,true,heavy,0.9454,0.8909,94.5,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,High-complexity transaction requiring enhanced verification
+DEMO-000296,8895.31,0,449,4814,false,light,0.4514,0.0973,45.1,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Normal transfer with no elevated factors remains light
+DEMO-000297,828.43,2,1234,4814,false,heavy,0.1218,0.7564,12.2,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Human reviewer corrected the original model. Low-complexity trusted transaction suitable for the fast path
+DEMO-000298,18840.52,1,49,5411,true,heavy,0.762,0.524,76.2,high,DEEP FRAUD CHECK,heavy,pre-hackathon-team,2026-07-20T10:00:00+00:00,Cashout interaction pattern was corrected by human reviewers
+DEMO-000299,3142.9,0,1205,4814,false,light,0.2391,0.5219,23.9,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Low-complexity trusted transaction suitable for the fast path
+DEMO-000300,4327.94,0,439,4814,false,light,0.407,0.186,40.7,low,LIGHT FAST-PATH,light,pre-hackathon-team,2026-07-20T10:00:00+00:00,Normal transfer with no elevated factors remains light
