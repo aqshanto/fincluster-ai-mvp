@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from core.orchestrator import MFSOrchestrator, StrategyMetrics
-from core.transaction_store import TransactionDatasetStore
+from core.transaction_store import DatasetImportError, TransactionDatasetStore
 from ml.hybrid_ai_engine import HybridAIEngine
 from ml.local_model import local_model
 
@@ -83,6 +83,17 @@ class RoutingTests(unittest.TestCase):
         route = orchestrator._route_task("ai", nodes, StrategyMetrics(), analysis)
         self.assertEqual(route.node_id, 1)
 
+
+
+    def test_normal_load_changes_temperature_without_anomaly(self) -> None:
+        orchestrator = MFSOrchestrator()
+        orchestrator.ai_nodes[0].load = 40.0
+        initial = orchestrator.ai_nodes[0].temp
+        for _ in range(5):
+            orchestrator._update_cluster(
+                "ai", orchestrator.ai_nodes, orchestrator.ai_metrics, 0.0
+            )
+        self.assertGreater(orchestrator.ai_nodes[0].temp, initial)
 
 class DatasetStoreTests(unittest.TestCase):
     def test_manual_row_can_receive_human_feedback(self) -> None:
@@ -183,6 +194,134 @@ class DatasetStoreTests(unittest.TestCase):
                     os.environ.pop("AI_DATASET_PATH", None)
                 else:
                     os.environ["AI_DATASET_PATH"] = old_path
+
+    def test_prepared_batch_import_is_strict_and_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            old_path = os.environ.get("AI_DATASET_PATH")
+            old_database_url = os.environ.pop("DATABASE_URL", None)
+            os.environ["AI_DATASET_PATH"] = str(Path(directory) / "batch.db")
+            try:
+                store = TransactionDatasetStore()
+                demo_dir = Path(__file__).resolve().parents[1] / "demo_data"
+                baseline = (demo_dir / "baseline_099.csv").read_bytes()
+                result = store.import_reviewed_csv(
+                    csv_bytes=baseline,
+                    batch_id="baseline-099",
+                    filename="baseline_099.csv",
+                    imported_by="tester",
+                    expected_start_reviewed=0,
+                    expected_end_reviewed=99,
+                    strict_sequence=True,
+                )
+                self.assertEqual(result["inserted_rows"], 99)
+                self.assertEqual(store.stats()["reviewed_rows"], 99)
+                duplicate = store.import_reviewed_csv(
+                    csv_bytes=baseline,
+                    batch_id="baseline-099",
+                    filename="baseline_099.csv",
+                    imported_by="tester",
+                    expected_start_reviewed=0,
+                    expected_end_reviewed=99,
+                    strict_sequence=True,
+                )
+                self.assertEqual(duplicate["status"], "already_imported")
+
+                with self.assertRaises(DatasetImportError):
+                    store.import_reviewed_csv(
+                        csv_bytes=(demo_dir / "batch_02_rows_101_200.csv").read_bytes(),
+                        batch_id="batch-02-101-200",
+                        filename="batch_02_rows_101_200.csv",
+                        imported_by="tester",
+                        expected_start_reviewed=100,
+                        expected_end_reviewed=200,
+                        strict_sequence=True,
+                    )
+            finally:
+                if old_path is None:
+                    os.environ.pop("AI_DATASET_PATH", None)
+                else:
+                    os.environ["AI_DATASET_PATH"] = old_path
+                if old_database_url is not None:
+                    os.environ["DATABASE_URL"] = old_database_url
+
+    def test_learning_demo_reset_clears_persistent_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            old_path = os.environ.get("AI_DATASET_PATH")
+            old_database_url = os.environ.pop("DATABASE_URL", None)
+            os.environ["AI_DATASET_PATH"] = str(Path(directory) / "reset.db")
+            try:
+                store = TransactionDatasetStore()
+                demo_dir = Path(__file__).resolve().parents[1] / "demo_data"
+                store.import_reviewed_csv(
+                    csv_bytes=(demo_dir / "baseline_099.csv").read_bytes(),
+                    batch_id="baseline-099",
+                    filename="baseline_099.csv",
+                    imported_by="tester",
+                    expected_start_reviewed=0,
+                    expected_end_reviewed=99,
+                    strict_sequence=True,
+                )
+                store.save_retraining_state(
+                    {
+                        "last_attempted_reviewed_rows": 100,
+                        "last_promoted_reviewed_rows": 100,
+                        "promotions": 1,
+                    }
+                )
+                store.save_model_artifact(
+                    model_version="demo-model",
+                    selected_algorithm="random_forest",
+                    artifact_bytes=b"demo",
+                    metrics={"accuracy": 0.9},
+                    reviewed_rows=100,
+                )
+
+                stats = store.reset_learning_demo()
+                state = store.get_retraining_state()
+                self.assertEqual(stats["reviewed_rows"], 0)
+                self.assertEqual(store.list_dataset_imports(), [])
+                self.assertEqual(store.list_retraining_runs(), [])
+                self.assertIsNone(store.latest_model_artifact())
+                self.assertEqual(state["last_attempted_reviewed_rows"], 0)
+                self.assertEqual(state["promotions"], 0)
+            finally:
+                if old_path is None:
+                    os.environ.pop("AI_DATASET_PATH", None)
+                else:
+                    os.environ["AI_DATASET_PATH"] = old_path
+                if old_database_url is not None:
+                    os.environ["DATABASE_URL"] = old_database_url
+
+    def test_retraining_state_survives_store_recreation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            old_path = os.environ.get("AI_DATASET_PATH")
+            old_database_url = os.environ.pop("DATABASE_URL", None)
+            os.environ["AI_DATASET_PATH"] = str(Path(directory) / "state.db")
+            try:
+                store = TransactionDatasetStore()
+                store.save_retraining_state(
+                    {
+                        "last_attempted_reviewed_rows": 200,
+                        "last_promoted_reviewed_rows": 100,
+                        "promotions": 1,
+                        "last_started_at": "start",
+                        "last_completed_at": "done",
+                        "last_error": None,
+                        "last_result": {"promoted": False},
+                    }
+                )
+                recreated = TransactionDatasetStore()
+                state = recreated.get_retraining_state()
+                self.assertEqual(state["last_attempted_reviewed_rows"], 200)
+                self.assertEqual(state["last_promoted_reviewed_rows"], 100)
+                self.assertEqual(state["promotions"], 1)
+            finally:
+                if old_path is None:
+                    os.environ.pop("AI_DATASET_PATH", None)
+                else:
+                    os.environ["AI_DATASET_PATH"] = old_path
+                if old_database_url is not None:
+                    os.environ["DATABASE_URL"] = old_database_url
 
 
 if __name__ == "__main__":

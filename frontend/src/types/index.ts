@@ -123,6 +123,7 @@ export interface DatasetStatus {
   max_rows: number;
   auto_sample_every: number;
   storage: string;
+  persistent?: boolean;
   contains_sensitive_identifiers: boolean;
   last_error: string | null;
 }

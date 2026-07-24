@@ -67,7 +67,7 @@ export default function NodeCard({ node }: NodeCardProps) {
           }`}
         >
           <Thermometer className="h-3.5 w-3.5" />
-          {Math.floor(node.temp)}°C
+          {node.temp.toFixed(1)}°C
         </span>
 
         <span className="text-center text-slate-300">

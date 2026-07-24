@@ -102,7 +102,7 @@ export default function RetrainingSection() {
           </div>
 
           <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5 text-center">
-            <p className="font-mono text-3xl font-black text-emerald-300">25</p>
+            <p className="font-mono text-3xl font-black text-emerald-300">100</p>
             <p className="mt-2 text-sm font-bold text-white">
               Later review batch
             </p>

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import api from "@/services/api";
+import DatasetManagerModal from "./DatasetManagerModal";
 import ReviewQueueModal from "./ReviewQueueModal";
 import TransactionModal from "./TransactionModal";
 
@@ -47,18 +48,15 @@ export default function ControlPanel({
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showTxModal, setShowTxModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showDatasetModal, setShowDatasetModal] = useState(false);
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
-  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
-
-    if (!token) {
-      return;
-    }
+    if (!token) return;
 
     api
       .get("/api/v1/auth/me")
@@ -77,9 +75,7 @@ export default function ControlPanel({
         username,
         password,
       });
-
       localStorage.setItem("access_token", response.data.access_token);
-
       setIsLoggedIn(true);
       setShowLoginModal(false);
       setPassword("");
@@ -88,7 +84,6 @@ export default function ControlPanel({
       const message = axios.isAxiosError<{ detail?: string }>(caught)
         ? caught.response?.data?.detail
         : undefined;
-
       setError(message || "Invalid username or password.");
     }
   };
@@ -114,7 +109,6 @@ export default function ControlPanel({
       const detail = axios.isAxiosError<{ detail?: string }>(caught)
         ? caught.response?.data?.detail
         : undefined;
-
       setActionMessage(
         detail || "Control action failed. Check the backend connection.",
       );
@@ -127,37 +121,21 @@ export default function ControlPanel({
       await api.post("/api/v1/control/reset");
     });
 
-  const handleExportDataset = () =>
-    requireOperator(async () => {
-      setExporting(true);
-
-      try {
-        const response = await api.get("/api/v1/ai/dataset.csv", {
-          responseType: "blob",
-        });
-
-        const url = URL.createObjectURL(response.data);
-        const anchor = document.createElement("a");
-
-        anchor.href = url;
-        anchor.download = "fincluster-training-data.csv";
-
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-
-        URL.revokeObjectURL(url);
-      } finally {
-        setExporting(false);
-      }
-    });
-
   const handleLogout = () => {
     localStorage.removeItem("access_token");
-
     setIsLoggedIn(false);
     setShowTxModal(false);
     setShowReviewModal(false);
+    setShowDatasetModal(false);
+  };
+
+  const handleUnauthorized = () => {
+    localStorage.removeItem("access_token");
+    setIsLoggedIn(false);
+    setShowTxModal(false);
+    setShowReviewModal(false);
+    setShowDatasetModal(false);
+    setShowLoginModal(true);
   };
 
   return (
@@ -178,10 +156,7 @@ export default function ControlPanel({
                   : "border-slate-600 bg-slate-800 text-slate-400 shadow-none hover:bg-slate-700"
               }`}
             >
-              <Brain
-                className={`h-4 w-4 ${aiEnabled ? "animate-pulse" : ""}`}
-              />
-
+              <Brain className={`h-4 w-4 ${aiEnabled ? "animate-pulse" : ""}`} />
               <span>{aiEnabled ? "AI Scheduler" : "Legacy Mode"}</span>
             </button>
 
@@ -205,7 +180,6 @@ export default function ControlPanel({
               }`}
             >
               <Cloud className="h-4 w-4" />
-
               <span>Manual AI: {externalAIEnabled ? "ON" : "OFF"}</span>
             </button>
 
@@ -223,7 +197,6 @@ export default function ControlPanel({
               }`}
             >
               <Zap className="h-4 w-4" />
-
               <span>{surgeActive ? "Stop Surge" : "Eid Surge"}</span>
             </button>
 
@@ -241,7 +214,6 @@ export default function ControlPanel({
               }`}
             >
               <Flame className="h-4 w-4 text-amber-400" />
-
               <span>{anomalyActive ? "Stop Anomaly" : "Node Anomaly"}</span>
             </button>
 
@@ -250,11 +222,9 @@ export default function ControlPanel({
               onClick={() =>
                 isLoggedIn ? setShowTxModal(true) : setShowLoginModal(true)
               }
-              title="Inject realistic transactions with ISO-8583 metadata"
               className={`${baseButton} border-emerald-600 bg-emerald-950/80 text-emerald-300 shadow-lg hover:bg-emerald-900 active:scale-95`}
             >
               <Send className="h-4 w-4 text-emerald-400" />
-
               <span>Manual Tx</span>
             </button>
 
@@ -263,7 +233,6 @@ export default function ControlPanel({
               onClick={() =>
                 isLoggedIn ? setShowReviewModal(true) : setShowLoginModal(true)
               }
-              title="Review uncertain manual transactions before routing"
               className={`${baseButton} ${
                 pendingReviewCount > 0
                   ? "border-amber-600 bg-amber-950 text-amber-300 shadow-lg shadow-amber-500/20 hover:bg-amber-900"
@@ -271,39 +240,32 @@ export default function ControlPanel({
               }`}
             >
               <ClipboardCheck className="h-4 w-4" />
-
               <span>Reviews {pendingReviewCount}</span>
             </button>
 
             <button
               type="button"
               onClick={() => void handleReset()}
-              title="Reset both clusters, chart, time, tasks, and routing events"
               className={`${baseButton} border-rose-700 bg-rose-950/80 text-rose-300 shadow-lg hover:bg-rose-900 active:scale-95`}
             >
               <RotateCcw className="h-4 w-4 text-rose-400" />
-
               <span>Reset Sim</span>
             </button>
 
             <button
               type="button"
-              onClick={() => void handleExportDataset()}
-              title="Export privacy-safe collected features and reviewed labels"
+              onClick={() =>
+                isLoggedIn ? setShowDatasetModal(true) : setShowLoginModal(true)
+              }
               className={`${baseButton} border-cyan-800 bg-slate-900 text-cyan-300 hover:bg-slate-800`}
             >
               <Database className="h-4 w-4" />
-
-              <span>
-                {exporting ? "Exporting..." : `Dataset ${datasetRows}`}
-              </span>
+              <span>Dataset {datasetRows}</span>
             </button>
 
             <button
               type="button"
-              onClick={
-                isLoggedIn ? handleLogout : () => setShowLoginModal(true)
-              }
+              onClick={isLoggedIn ? handleLogout : () => setShowLoginModal(true)}
               className={`${baseButton} border-slate-700 bg-slate-900 font-mono text-slate-300 hover:border-blue-500`}
             >
               {isLoggedIn ? (
@@ -311,7 +273,6 @@ export default function ControlPanel({
               ) : (
                 <Lock className="h-3.5 w-3.5 text-amber-400" />
               )}
-
               <span>{isLoggedIn ? "Sign out" : "Operator Login"}</span>
             </button>
           </div>
@@ -327,24 +288,21 @@ export default function ControlPanel({
       {showTxModal && (
         <TransactionModal
           onClose={() => setShowTxModal(false)}
-          onUnauthorized={() => {
-            localStorage.removeItem("access_token");
-            setIsLoggedIn(false);
-            setShowTxModal(false);
-            setShowLoginModal(true);
-          }}
+          onUnauthorized={handleUnauthorized}
         />
       )}
 
       {showReviewModal && (
         <ReviewQueueModal
           onClose={() => setShowReviewModal(false)}
-          onUnauthorized={() => {
-            localStorage.removeItem("access_token");
-            setIsLoggedIn(false);
-            setShowReviewModal(false);
-            setShowLoginModal(true);
-          }}
+          onUnauthorized={handleUnauthorized}
+        />
+      )}
+
+      {showDatasetModal && (
+        <DatasetManagerModal
+          onClose={() => setShowDatasetModal(false)}
+          onUnauthorized={handleUnauthorized}
         />
       )}
 
@@ -355,10 +313,9 @@ export default function ControlPanel({
               <Lock className="h-5 w-5 text-blue-400" />
               Operator Authentication
             </h3>
-
             <p className="mb-4 text-xs text-slate-400">
               Telemetry is public. A signed operator token is required to change
-              simulation state or inject transactions.
+              simulation state, import datasets, or resolve reviews.
             </p>
 
             {error && (
@@ -369,10 +326,7 @@ export default function ControlPanel({
 
             <form onSubmit={handleLogin} className="space-y-3">
               <label className="block">
-                <span className="mb-1 block text-xs text-slate-300">
-                  Username
-                </span>
-
+                <span className="mb-1 block text-xs text-slate-300">Username</span>
                 <input
                   type="text"
                   value={username}
@@ -383,10 +337,7 @@ export default function ControlPanel({
               </label>
 
               <label className="block">
-                <span className="mb-1 block text-xs text-slate-300">
-                  Password
-                </span>
-
+                <span className="mb-1 block text-xs text-slate-300">Password</span>
                 <input
                   type="password"
                   value={password}
@@ -403,7 +354,6 @@ export default function ControlPanel({
                 >
                   Sign in
                 </button>
-
                 <button
                   type="button"
                   onClick={() => {

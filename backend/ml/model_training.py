@@ -159,6 +159,33 @@ def _evaluate(
     )
 
 
+def evaluate_model(
+    model: Any,
+    features: Sequence[Sequence[float]],
+    labels: Sequence[int],
+    *,
+    threshold: float,
+    training_rows: int,
+    evaluation_split: str = "fixed_demo_evaluation",
+) -> ModelMetrics:
+    """Evaluate a trained candidate against a stable, untouched dataset."""
+
+    if not features or len(features) != len(labels):
+        raise ValueError("Evaluation features and labels must be non-empty and aligned")
+    if set(labels) != {0, 1}:
+        raise ValueError("Evaluation data must contain both heavy and light labels")
+    probabilities = model.predict_proba(features)[:, 1]
+    return _evaluate(
+        labels,
+        probabilities,
+        threshold=threshold,
+        training_rows=training_rows,
+        validation_rows=0,
+        test_rows=len(labels),
+        evaluation_split=evaluation_split,
+    )
+
+
 def _tune_threshold(labels: Sequence[int], probabilities: Sequence[float]) -> float:
     best_threshold = 0.52
     best_key = (-1.0, -1.0, -1.0, -1.0)

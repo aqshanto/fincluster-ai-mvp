@@ -1,0 +1,41 @@
+{
+  "dataset_name": "FinCluster Pre-Hackathon Human-Reviewed Demo Dataset",
+  "dataset_version": "demo-reviewed-v1",
+  "source": "FinCluster simulator-generated scenarios reviewed by the project team",
+  "contains_real_customer_data": false,
+  "fixed_evaluation_file": "fixed_evaluation_120.csv",
+  "batches": [
+    {
+      "batch_id": "baseline-099",
+      "label": "Baseline 0 \u2192 99",
+      "filename": "baseline_099.csv",
+      "rows": 99,
+      "expected_start_reviewed": 0,
+      "expected_end_reviewed": 99,
+      "description": "Prepared reviewed baseline. It intentionally stops one row before the first retraining threshold."
+    },
+    {
+      "batch_id": "batch-02-101-200",
+      "label": "Batch 2: 100 \u2192 200",
+      "filename": "batch_02_rows_101_200.csv",
+      "rows": 100,
+      "expected_start_reviewed": 100,
+      "expected_end_reviewed": 200,
+      "description": "One hundred new reviewed edge cases for the second controlled retraining cycle."
+    },
+    {
+      "batch_id": "batch-03-201-300",
+      "label": "Batch 3: 200 \u2192 300",
+      "filename": "batch_03_rows_201_300.csv",
+      "rows": 100,
+      "expected_start_reviewed": 200,
+      "expected_end_reviewed": 300,
+      "description": "A third reviewed batch containing corrected interaction patterns."
+    }
+  ],
+  "limitations": [
+    "Synthetic simulator scenarios, not production banking data",
+    "Metrics demonstrate the controlled learning pipeline",
+    "The evaluation set is never imported into the training database"
+  ]
+}

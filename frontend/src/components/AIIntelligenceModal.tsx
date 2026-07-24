@@ -85,6 +85,8 @@ interface AIStatusResponse {
     batch_size: number;
     reviewed_rows: number;
     last_trained_reviewed_rows: number;
+    last_attempted_reviewed_rows?: number;
+    last_promoted_reviewed_rows?: number;
     next_retrain_at: number;
     artifact_path: string;
     quality_gates: {
@@ -162,6 +164,9 @@ export default function AIIntelligenceModal({
     const timer = window.setTimeout(() => {
       void loadStatus();
     }, 0);
+    const refreshInterval = window.setInterval(() => {
+      void loadStatus();
+    }, 2_000);
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -176,6 +181,7 @@ export default function AIIntelligenceModal({
 
     return () => {
       window.clearTimeout(timer);
+      window.clearInterval(refreshInterval);
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
@@ -204,10 +210,10 @@ export default function AIIntelligenceModal({
   const retraining = statusData?.retraining;
 
   const reviewProgress =
-    retraining && retraining.min_reviewed > 0
+    retraining && retraining.next_retrain_at > 0
       ? Math.min(
           100,
-          (retraining.reviewed_rows / retraining.min_reviewed) * 100,
+          (retraining.reviewed_rows / retraining.next_retrain_at) * 100,
         )
       : 0;
 
@@ -530,8 +536,8 @@ export default function AIIntelligenceModal({
                       </p>
 
                       <p className="mt-3 text-lg font-black text-white">
-                        {retraining.reviewed_rows} / {retraining.min_reviewed}{" "}
-                        reviewed labels
+                        {retraining.reviewed_rows} / {retraining.next_retrain_at}{" "}
+                        reviewed labels to next cycle
                       </p>
                     </div>
 
